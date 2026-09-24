@@ -1,0 +1,61 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createSpeechQueue, splitSpeech } from './speechQueue'
+describe('spoken responses', () => {
+    it('retries only the unspoken phrase on rate limit and retains device voice across replies', async () => {
+        const controller = new AbortController(), voiceSession = { device: false }, heard = [], onError = vi.fn(), onProvider = vi.fn()
+        const synthesize = vi.fn().mockResolvedValueOnce('first audio').mockRejectedValue(Object.assign(new Error('quota'), { status: 429 }))
+        const fallback = vi.fn(async text => heard.push(text))
+        const options = { signal: controller.signal, synthesize, voiceSession, fallback, play: async text => heard.push(text), onState: vi.fn(), onError, onProvider }
+        const queue = createSpeechQueue(options)
+        queue.append('First phrase is long enough to speak. Second phrase is also long enough to speak. Third phrase is long enough to speak.')
+        expect(await queue.finish()).toBe(true)
+        const next = createSpeechQueue(options); next.append('Another reply in the same conversation.'); await next.finish()
+        expect(synthesize).toHaveBeenCalledTimes(2)
+        expect(heard).toEqual(['first audio', 'Second phrase is also long enough to speak.', 'Third phrase is long enough to speak.', 'Another reply in the same conversation.'])
+        expect(onProvider).toHaveBeenCalledWith('device'); expect(onError).not.toHaveBeenCalled()
+        const fresh = createSpeechQueue({ ...options, voiceSession: { device: false }, synthesize: vi.fn().mockResolvedValue('new conversation') })
+        fresh.append('A fresh conversation tries Orpheus again.'); await fresh.finish()
+        expect(heard.at(-1)).toBe('new conversation')
+    })
+    it.each([401, 403, 500])('does not mask other speech failures with fallback (%s)', async status => {
+        const fallback = vi.fn(), onError = vi.fn()
+        const queue = createSpeechQueue({ signal: new AbortController().signal, synthesize: async () => { throw Object.assign(new Error('failure'), { status }) }, fallback, onState: vi.fn(), onError })
+        queue.append('A reply that cannot be generated.'); expect(await queue.finish()).toBe(false)
+        expect(fallback).not.toHaveBeenCalled(); expect(onError).toHaveBeenCalledTimes(1)
+    })
+    it('cancels during fallback without speaking remaining phrases or reporting an error', async () => {
+        const controller = new AbortController(), fallback = vi.fn(async () => { controller.abort(); throw new DOMException('Aborted', 'AbortError') }), onError = vi.fn()
+        const queue = createSpeechQueue({ signal: controller.signal, synthesize: async () => { throw Object.assign(new Error('quota'), { status: 429 }) }, fallback, onState: vi.fn(), onError })
+        queue.append('This phrase starts device playback. This phrase must never be spoken.'); await queue.finish()
+        expect(fallback).toHaveBeenCalledTimes(1); expect(onError).not.toHaveBeenCalled()
+    })
+    it('reports unavailable device speech once and leaves subsequent phrases unspoken', async () => {
+        const fallback = vi.fn().mockRejectedValue(new Error('No voices')), onError = vi.fn()
+        const queue = createSpeechQueue({ signal: new AbortController().signal, voiceSession: { device: true }, synthesize: vi.fn(), fallback, onState: vi.fn(), onError })
+        queue.append('This phrase cannot use a device voice. This phrase must not try again.'); expect(await queue.finish()).toBe(false)
+        expect(fallback).toHaveBeenCalledTimes(1); expect(onError).toHaveBeenCalledTimes(1)
+    })
+    it('holds a partial sentence until there is enough context', () => { expect(splitSpeech('Review your entries')).toEqual({ chunks: [], remainder: 'Review your entries' }) })
+    it('bounds chunks to Orpheus limits and strips presentation markup', () => { const { chunks, remainder } = splitSpeech('**Review** the [journal](/log) before planning your next session. ' + 'word '.repeat(500), true); expect(remainder).toBe(''); expect(chunks.every(v => v.length <= 200)).toBe(true); expect(chunks[0]).not.toContain('**'); expect(chunks[0]).not.toContain('/log') })
+    it('preserves long unbroken input and Unicode at phrase boundaries', () => {
+        const input = 'a'.repeat(199) + '😀' + 'b'.repeat(240)
+        const { chunks, remainder } = splitSpeech(input, true)
+        expect(chunks.join('')).toBe(input); expect(remainder).toBe('')
+        expect(chunks.every(chunk => chunk.length <= 200 && !/[\uD800-\uDBFF]$/.test(chunk))).toBe(true)
+    })
+    it('preserves synthesis and playback order', async () => {
+        const order = [], controller = new AbortController()
+        const queue = createSpeechQueue({ signal: controller.signal, synthesize: async text => { order.push('synthesize'); return text }, play: async () => { order.push('play') }, onState: vi.fn(), onError: vi.fn() })
+        queue.append('Take a moment to review the decisions behind your last trade. '); queue.append('There is another useful pattern in your completed journal entries. ')
+        await queue.finish(); expect(order).toEqual(['synthesize', 'play', 'synthesize', 'play'])
+    })
+    it('stops queued work after cancellation and reports speech failure once', async () => {
+        const controller = new AbortController(), synthesize = vi.fn(), onError = vi.fn()
+        controller.abort()
+        const queue = createSpeechQueue({ signal: controller.signal, synthesize, onState: vi.fn(), onError })
+        queue.append('A sentence that should never go to the speech generation service. '); await queue.finish(); expect(synthesize).not.toHaveBeenCalled()
+        const failed = createSpeechQueue({ signal: new AbortController().signal, synthesize: async () => { throw new Error('Unavailable') }, onState: vi.fn(), onError })
+        failed.append('A long enough sentence to begin speech synthesis for this response. Another long enough sentence to queue speech generation after failure. ')
+        expect(await failed.finish()).toBe(false); expect(onError).toHaveBeenCalledTimes(1)
+    })
+})

@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', '.scratch'] },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
@@ -44,11 +44,47 @@ export default [
   {
     // Server-side only: the Vercel function, its helpers, and the Vite config
     // run in Node, so they get Node globals (process, Buffer) instead.
-    files: ['api/**/*.js', 'vite.config.js'],
+    files: ['api/**/*.js', 'server/**/*.js', 'scripts/**/*.{js,mjs}', 'tests/**/*.js', 'vite.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: globals.node,
+    },
+  },
+  {
+    files: ['src/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        group: ['**/server/**', '**/api/**', 'node:*'],
+        message: 'Browser modules use HTTP clients; server implementations stay in server/ and api/.',
+      }] }],
+    },
+  },
+  {
+    files: ['api/**/*.js', 'server/**/*.js'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        group: ['**/src/features/**', '**/src/platform/**', '**/src/app/**', '**/src/shared/**'],
+        message: 'Server modules use server implementations and pure shared/domain code, never browser modules.',
+      }] }],
+    },
+  },
+  {
+    files: ['src/domain/**/*.js', 'shared/**/*.js'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        group: ['react', 'react-dom', 'react-dom/**', '@supabase/**', 'node:*', '**/features/**', '**/platform/**', '**/app/**', '**/server/**', '**/api/**', '**/src/shared/**'],
+        message: 'Domain and cross-runtime modules stay independent of React, storage, and host adapters.',
+      }] }],
+    },
+  },
+  {
+    files: ['src/platform/**/*.js', 'src/shared/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        group: ['**/features/**', '**/app/**', '**/server/**', '**/api/**', 'node:*'],
+        message: 'Browser infrastructure and shared UI cannot depend on feature or application modules.',
+      }] }],
     },
   },
 ]
