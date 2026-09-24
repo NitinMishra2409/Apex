@@ -6,8 +6,21 @@
     }
   ],
   "functions": {
+    "api/chat.js": {
+      "maxDuration": 180,
+      "supportsCancellation": true
+    },
+    "api/speak.js": {
+      "maxDuration": 120,
+      "supportsCancellation": true
+    },
+    "api/listen.js": {
+      "includeFiles": "server/speech/proto/**",
+      "maxDuration": 150,
+      "supportsCancellation": true
+    },
     "api/transcribe.js": {
-      "includeFiles": "api/proto/**"
+      "includeFiles": "server/speech/proto/**"
     }
   }
 }
