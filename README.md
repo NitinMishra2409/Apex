@@ -26,11 +26,11 @@ required.
 
 | Script | Purpose |
 |---|---|
-| `npm run dev` | Dev server + the `/api/transcribe` route |
+| `npm run dev` | Dev server + all four `/api/` routes |
 | `npm run build` | Production build to `dist/` |
 | `npm run preview` | Serve `dist/` — **no API routes**, so voice dictation won't work |
 | `npm run lint` | ESLint (baseline is 0 errors — keep it there) |
-| `npm test` | Vitest, 34 tests |
+| `npm test` | Vitest, 127 tests |
 | `npm run test:watch` | Vitest in watch mode |
 
 ---
@@ -116,7 +116,7 @@ The microphone requires `localhost` or HTTPS — browsers block it otherwise.
 3. Deploy.
 
 `vercel.json` does two necessary things: rewrites all paths to `/` so client-side
-routing survives a refresh, and `includeFiles: "api/proto/**"` so the protobuf
+routing survives a refresh, and `includeFiles: "server/speech/proto/**"` so the protobuf
 files ship with the serverless function. **Without the second, the build
 succeeds and transcription fails at runtime.**
 
@@ -127,7 +127,7 @@ After deploying, work through [`docs/SETUP_CHECKLIST.md`](./docs/SETUP_CHECKLIST
 ## ⚠️ Before you deploy publicly
 
 `VITE_SUPABASE_SERVICE_ROLE_KEY` is currently read in client-side code
-(`src/lib/supabaseAdmin.js`), which means **it ships inside the public
+(`src/features/admin/adminClient.js`), which means **it ships inside the public
 JavaScript bundle**. That key bypasses Row Level Security entirely — anyone who
 opens devtools can read or delete every user's data.
 
@@ -137,6 +137,12 @@ Verify for yourself:
 npm run build && grep -o "your-service-role-key" dist/assets/*.js
 ```
 
-The fix is to move `src/services/admin.js` behind a server route, the same way
+The fix is to move `src/features/admin/repository.js` behind a server route, the same way
 `/api/transcribe` handles the NVIDIA key. Until then, treat this as a
 demo/personal deployment only. See ARCHITECTURE.md §10.
+
+## Conversational AI Coach
+
+AI Coach now connects authenticated journal context to streaming Llama 3.3 70B chat on Groq, with Whisper transcription and Groq Orpheus (Autumn) voice replies. For local testing, use `VITE_DEMO_MODE=true`, server-only `GROQ_API_KEY` for chat/speech and `NVIDIA_API_KEY` for transcription, and `npm run dev` on localhost—no sign-in is needed. Deployed use requires a real signed-in account (`VITE_DEMO_MODE=false`). Voice mode detects pauses between turns and provides Interrupt/End controls.
+
+See [assistant setup, architecture and live verification status](docs/AI_ASSISTANT.md). The Orpheus/Whisper synthetic round-trip passed. On speech rate limits, Easy Speech supplies a device voice for the remainder of the conversation. The assistant now uses Groq Llama 3.3 70B; see the linked verification status for the latest live model check. No live journal data was used in the provider checks.
