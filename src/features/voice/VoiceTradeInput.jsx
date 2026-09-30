@@ -3,11 +3,14 @@ import { Mic, Square, X, Loader2, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { startRecording, recordingSupported, MAX_RECORDING_MS } from '../../platform/audio/recording'
 import { parseTradeSpeech, FIELD_LABELS } from './voiceParse'
+import { matchChecklist } from './checklistMatch'
 import { DEMO } from '../../platform/demo/store'
+import { transcribeRecording, matchChecklistRemote } from '../../platform/http/client'
+import './voice.css'
 
-// Used only when demo mode is on and no NVIDIA key is configured yet, so the
+// Used only when demo mode is on and no Groq key is configured yet, so the
 // flow can be seen end to end before the key arrives.
-const DEMO_TRANSCRIPT = 'Long bitcoin at 68,400 with a stop at 67,200 and target 71,500, size 5000, breakout setup, I chased the entry a little'
+const DEMO_TRANSCRIPT = 'Long bitcoin at 68,400 with a stop at 67,200 and target 71,500, 5,000 units, breakout setup, I chased the entry a little, checklist one, two and four'
 
 const fmtTime = (ms) => {
     const s = Math.floor(ms / 1000)
@@ -17,15 +20,16 @@ const fmtTime = (ms) => {
 const describeValue = (key, value) =>
     key === 'mistakes' ? value.join(', ') : String(value)
 
-export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
+export default function VoiceTradeInput({ onParsed, extraMistakes = [], checklistItems = [] }) {
     const [phase, setPhase] = useState('idle') // idle | recording | working
     const [elapsed, setElapsed] = useState(0)
-    const [result, setResult] = useState(null) // { transcript, matched, fields, simulated }
+    const [result, setResult] = useState(null) // { transcript, matched, fields, checklist, simulated }
 
     const handleRef = useRef(null)
     const startedAt = useRef(0)
     const tickRef = useRef(null)
     const autoStopRef = useRef(null)
+    const matchingRef = useRef(null) // aborts the AI checklist match if the form goes away
 
     const clearTimers = () => {
         clearInterval(tickRef.current)
@@ -33,27 +37,9 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
         tickRef.current = autoStopRef.current = null
     }
 
-    useEffect(() => () => { clearTimers(); handleRef.current?.cancel() }, [])
+    useEffect(() => () => { clearTimers(); handleRef.current?.cancel(); matchingRef.current?.abort() }, [])
 
-    const transcribe = useCallback(async (wav) => {
-        const res = await fetch('/api/transcribe?language=en-US', {
-            method: 'POST',
-            headers: { 'Content-Type': 'audio/wav' },
-            body: wav,
-        })
-
-        let payload = {}
-        try { payload = await res.json() } catch { /* non-JSON error page */ }
-
-        if (!res.ok) {
-            const err = new Error(payload.error || `Transcription failed (${res.status}).`)
-            err.code = payload.code
-            throw err
-        }
-        return payload.text ?? ''
-    }, [])
-
-    const finish = useCallback((transcript, simulated) => {
+    const finish = useCallback(async (transcript, simulated) => {
         const text = (transcript || '').trim()
         if (!text) {
             toast.error('Nothing was transcribed — try speaking a little longer.')
@@ -61,16 +47,31 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
             return
         }
 
+        // The AI reads the checklist while the trade fields are parsed. It only ever adds
+        // to the code match, and a busy or slow model just means the code match is used.
+        matchingRef.current?.abort()
+        const controller = matchingRef.current = new AbortController()
+        const asked = !simulated && checklistItems.length > 0
+        const aiMatch = asked ? matchChecklistRemote(text, checklistItems, controller.signal) : null
         const parsed = parseTradeSpeech(text, extraMistakes)
-        if (!parsed.matched.length) {
+        const ai = await aiMatch
+        if (controller.signal.aborted) return
+        const checklist = matchChecklist(text, checklistItems, ai)
+        const withoutAi = asked && !ai
+        const checklistHits = checklist.ticked.length + checklist.unsure.length
+        if (!parsed.matched.length && !checklistHits) {
             toast.error('Could not pick out any trade details from that.')
         } else {
-            onParsed?.({ fields: parsed.fields, transcript: text })
-            toast.success(`Filled ${parsed.matched.length} field${parsed.matched.length > 1 ? 's' : ''} from voice.`)
+            onParsed?.({ fields: parsed.fields, checklist, transcript: text })
+            const filled = [
+                parsed.matched.length && `${parsed.matched.length} field${parsed.matched.length > 1 ? 's' : ''}`,
+                checklist.ticked.length && `${checklist.ticked.length} check${checklist.ticked.length > 1 ? 's' : ''}`,
+            ].filter(Boolean)
+            toast.success(filled.length ? `Filled ${filled.join(' and ')} from voice.` : 'Some checks need a look.')
         }
-        setResult({ transcript: text, matched: parsed.matched, fields: parsed.fields, simulated })
+        setResult({ transcript: text, matched: parsed.matched, fields: parsed.fields, checklist, simulated, withoutAi })
         setPhase('idle')
-    }, [extraMistakes, onParsed])
+    }, [extraMistakes, checklistItems, onParsed])
 
     const stop = useCallback(async () => {
         clearTimers()
@@ -80,26 +81,26 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
         setPhase('working')
 
         try {
-            const wav = await handle.stop()
+            const audio = await handle.stop()
             let transcript, simulated = false
             try {
-                transcript = await transcribe(wav)
+                transcript = await transcribeRecording(audio)
             } catch (err) {
                 // Let the feature be demoed before the API key is added.
                 if (DEMO && err.code === 'NO_KEY') {
                     transcript = DEMO_TRANSCRIPT
                     simulated = true
-                    toast('No NVIDIA key yet — showing a sample transcript.', { icon: '🎧' })
+                    toast('No Groq key yet — showing a sample transcript.', { icon: '🎧' })
                 } else {
                     throw err
                 }
             }
-            finish(transcript, simulated)
+            await finish(transcript, simulated)
         } catch (err) {
             toast.error(err.message || 'Transcription failed.')
             setPhase('idle')
         }
-    }, [finish, transcribe])
+    }, [finish])
 
     const start = useCallback(async () => {
         if (!recordingSupported()) {
@@ -131,7 +132,7 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
     const busy = phase === 'working'
 
     return (
-        <div style={{ marginBottom: '1.1rem' }}>
+        <div className="voice-trade-input" style={{ marginBottom: '1.1rem' }}>
             <style>{`@keyframes vtPulse{0%,100%{opacity:1}50%{opacity:.45}} @keyframes vtSpin{to{transform:rotate(360deg)}}`}</style>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -174,7 +175,7 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
 
                 {phase === 'idle' && !result && (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        e.g. “long BTC at 68,400, stop 67,200, target 71,500, size 5000, breakout”
+                        e.g. “long BTC at 68,400, stop 67,200, target 71,500, 5,000 units, breakout, checklist one, two and four”
                     </span>
                 )}
             </div>
@@ -186,7 +187,7 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
                         <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                             {result.simulated ? 'Sample transcript' : 'Heard'}
                         </span>
-                        <button type="button" onClick={() => setResult(null)}
+                        <button type="button" onClick={() => setResult(null)} aria-label="Clear transcript review"
                             style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, lineHeight: 1 }}>
                             <X size={13} />
                         </button>
@@ -202,6 +203,25 @@ export default function VoiceTradeInput({ onParsed, extraMistakes = [] }) {
                                 </span>
                             ))}
                         </div>
+                    )}
+
+                    {(result.checklist.ticked.length > 0 || result.checklist.unsure.length > 0) && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                            {result.checklist.ticked.length > 0 && (
+                                <span style={{ padding: '3px 9px', borderRadius: 6, fontSize: 11.5, background: 'rgba(0,255,136,0.10)', color: 'var(--green)', border: '1px solid rgba(0,255,136,0.22)' }}>
+                                    Checklist: {result.checklist.ticked.map(item => checklistItems.indexOf(item) + 1).join(', ')}
+                                </span>
+                            )}
+                            {result.checklist.unsure.length > 0 && (
+                                <span style={{ padding: '3px 9px', borderRadius: 6, fontSize: 11.5, background: 'rgba(231,195,106,0.10)', color: 'var(--yellow, #e7c36a)', border: '1px solid rgba(231,195,106,0.28)' }}>
+                                    Not sure: {result.checklist.unsure.map(item => checklistItems.indexOf(item) + 1).join(', ')}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    {result.withoutAi && (
+                        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>Checklist matched without AI.</p>
                     )}
 
                     <button type="button" onClick={() => onParsed?.({ fields: { emotional_notes: result.transcript }, transcript: result.transcript })}

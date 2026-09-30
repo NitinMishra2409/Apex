@@ -1,0 +1,134 @@
+/* Workspace presentation follows the landing's Inter, amber and cool glass.
+   Scoped here so the marketing composition keeps its own scale and rhythm. */
+.workspace-main, .auth-page, .expert-dialog {
+  --surface-panel: linear-gradient(135deg, #20273199, #141a21 65%);
+  --surface-border: #485567;
+  --text-muted: #a1aec1;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-main { min-width: 0; }
+.workspace-main :is(h1, h2, h3), .auth-page :is(h1, h2), .expert-dialog :is(h2, h3) {
+  font-family: 'Inter', 'DM Sans', sans-serif;
+  text-wrap: balance;
+}
+.workspace-main .feature-page { padding: 36px 32px 48px !important; }
+.workspace-main .feature-page h1 { font-size: clamp(28px, 3vw, 36px) !important; font-weight: 600 !important; line-height: 1.2; letter-spacing: -1.2px; }
+.workspace-main .eyebrow { color: #d5b17b; font-size: 11px; letter-spacing: .15em; }
+.workspace-main .page-subtitle { font-size: 14px; line-height: 1.7; color: var(--text-secondary); max-width: 64ch; margin-top: 12px; margin-bottom: 28px; }
+.workspace-main :is(.card, .studio-panel, .playbook-section, .journal-filters, .journal-table-panel) {
+  border-color: var(--surface-border);
+  border-radius: 14px;
+  background: var(--surface-panel);
+  box-shadow: inset 0 1px #ffffff08, 0 12px 32px #0002;
+}
+.workspace-main :is(button, a), .auth-page :is(button, a), .expert-dialog button { touch-action: manipulation; -webkit-tap-highlight-color: #f1b65733; }
+.workspace-main :is(.btn-primary, .btn-secondary), .auth-page :is(.btn-primary, .btn-secondary), .expert-dialog .btn-primary { min-height: 42px; border-radius: 8px; }
+.workspace-main .btn-primary, .auth-page .btn-primary, .expert-dialog .btn-primary { background: var(--accent); color: #17130d; box-shadow: inset 0 1px #ffdfa066; transform: none; transition: background-color 160ms, border-color 160ms; }
+.workspace-main .btn-primary:hover, .auth-page .btn-primary:hover, .expert-dialog .btn-primary:hover { background: var(--accent-hover); }
+.workspace-main .btn-secondary, .auth-page .btn-secondary { background: #101419; border-color: #627287; }
+.workspace-main .btn-secondary:hover, .auth-page .btn-secondary:hover { background: #222b35; }
+.workspace-main :is(input, select, textarea):not([type=checkbox]):not([type=radio]), .auth-page input { border-color: #59697c; background-color: #101419; border-radius: 8px; }
+.workspace-main :is(input, select):not([type=checkbox]):not([type=radio]) { min-height: 42px; }
+.workspace-main :is(input, textarea)::placeholder, .auth-page input::placeholder { color: #96a4b7; }
+.workspace-main :is(input, textarea, select):focus-visible, .auth-page input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.workspace-main :is(button, a):focus-visible { outline-offset: 3px; }
+.workspace-main :is(.card, .studio-panel) > h2 { font-size: 17px; letter-spacing: -.35px; }
+.workspace-main .skeleton { background-image: linear-gradient(90deg, #25303d 25%, #3b485b 50%, #25303d 75%); }
+.workspace-main .empty-state { border: 1px dashed #59697c; border-radius: 14px; background: #141a21; }
+.workspace-main .error-banner { line-height: 1.7; }
+.workspace-main :is(.table-scroll, .studio-table-scroll, .journal-table-scroll) { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: #627287 #101419; }
+.workspace-main :is(table, .journal-summary, .analytics-stat) { font-variant-numeric: tabular-nums; }
+.workspace-main .studio-panel-heading p { font-size: 12px; }
+.workspace-main .studio-segments { flex-wrap: wrap; }
+.workspace-main .studio-segments button { min-height: 36px; font-size: 11px; }
+.studio-topbar { border-color: #37424e; }
+.studio-rail { overscroll-behavior: contain; }
+.rail-link { font-size: 11px; }
+.rail-link:hover svg, .studio-topbar .btn-primary, .workspace-main .btn-secondary:active { transform: none; }
+.studio-toolbar :is(.toolbar-control, .studio-date) { min-height: 40px; }
+.studio-toolbar .studio-date select { font-size: 12px; }
+.workspace-main .studio-dashboard { padding-top: 12px; }
+.workspace-main .studio-hero { padding-block: 24px; }
+.workspace-main .studio-hero h1 { font-weight: 600; letter-spacing: -1.2px; }
+.workspace-main .studio-stats { border-color: #596274; border-radius: 14px; margin-bottom: 18px; }
+.workspace-main .studio-dashboard-grid { gap: 18px; }
+.workspace-main :is(.studio-main-column, .studio-side-column) { gap: 18px; }
+.workspace-main .studio-review-card { border-radius: 14px; }
+.workspace-main .studio-metric-label { font-size: 12px; }
+.workspace-main .featured-metric .metric-number { font-size: clamp(28px, 2.5vw, 40px); }
+.workspace-main .stat-sparkline { min-width: 0; flex-shrink: 1; }
+.workspace-main .focus-item { min-height: 32px; }
+.workspace-main .focus-picker select { min-height: 36px; padding-left: 8px; }
+.workspace-main .journal-header { gap: 20px; flex-wrap: wrap; margin-bottom: 26px !important; }
+.workspace-main .journal-filters { padding: 18px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid var(--surface-border); }
+.journal-filters button { min-height: 38px; }
+.journal-filters select { max-width: 100%; }
+.workspace-main .journal-summary { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.workspace-main .journal-summary > div { padding: 16px !important; border-radius: 10px !important; border-color: #37424e !important; }
+.journal-table-panel { border: 1px solid var(--surface-border); overflow: hidden; }
+.journal-table-scroll { padding: 4px; }
+.journal-table-scroll table { min-width: 1100px; }
+.journal-details { overflow-wrap: anywhere; max-width: 1050px; }
+.journal-expand { color: var(--text-primary); border: 0; border-bottom: 1px dotted #8492a8; background: transparent; padding: 8px 2px; text-align: left; }
+.journal-expand:hover, .journal-expand[aria-expanded=true] { color: var(--accent); }
+.journal-loading { overflow: hidden; }
+.workspace-main .form-section-title { padding-top: 26px; margin-top: 22px; border-top: 1px solid #37424e; }
+.workspace-main form > .form-section-title:first-child { border: 0; margin-top: 0; padding-top: 0; }
+.workspace-main .form-section-title h2 { font-size: 18px; }
+.workspace-main .form-section-title p { color: var(--text-secondary); font-size: 13px; }
+.workspace-main .form-columns { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.workspace-main .form-columns > div { min-width: 0; overflow-wrap: anywhere; }
+.trade-edit-dialog { margin: auto; width: min(620px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 26px; border: 1px solid #59697c; border-radius: 14px; color: var(--text-primary); background: #141a21; overscroll-behavior: contain; box-shadow: 0 24px 80px #0009; }
+.trade-edit-dialog::backdrop { background: #070b10c9; backdrop-filter: blur(8px); }
+.trade-edit-dialog .edit-preview { flex-wrap: wrap; overflow-wrap: anywhere; }
+.playbook-section { margin-bottom: 18px; border: 1px solid var(--surface-border); }
+.playbook-header { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 20px; background: transparent; color: var(--text-primary); border: 0; border-radius: 14px; text-align: left; }
+.playbook-header:hover { background: #ffffff05; }
+.playbook-title { margin: 0; }
+.playbook-name { font-size: 17px; font-weight: 600; }
+.playbook-header:focus-visible { outline-offset: -4px; }
+.playbook-item { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--border-subtle); padding: 6px 0; }
+.playbook-check { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; min-height: 44px; cursor: pointer; font-size: 13px; overflow-wrap: anywhere; }
+.playbook-check input { width: 20px; height: 20px; flex-shrink: 0; }
+.playbook-check:has(input:checked) span { color: var(--text-muted); text-decoration: line-through; }
+.playbook-item > span { min-width: 0; overflow-wrap: anywhere; }
+.playbook-delete { min-height: 36px; min-width: 36px; color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 6px; }
+.playbook-delete:hover { color: var(--red); background: #f0808610; border-color: #f0808644; }
+.workspace-main .analytics-stat { border: 1px solid #37424e; background: #18212c; border-radius: 10px; }
+.workspace-main .analytics-stat-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+.workspace-main .settings-card { padding: 24px; margin-top: 20px; }
+.workspace-main .trade-check { min-height: 44px; border-color: #59697c; }
+.workspace-main .trade-check > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.workspace-main .trade-check.is-on { border-color: var(--accent); }
+.workspace-main .trade-check-number { flex-shrink: 0; }
+.workspace-main .setting-row > div { min-width: 0; }
+.workspace-main .setting-row p { max-width: 55ch; line-height: 1.7; }
+.workspace-main .setting-row :is(select, input):not([type=checkbox]) { padding: 10px 12px; }
+.workspace-main .setting-row input[type=checkbox] { flex-shrink: 0; }
+@media (max-width: 1050px) {
+  .workspace-main .studio-metric-body { flex-wrap: wrap; }
+  .workspace-main .studio-panel-heading { flex-wrap: wrap; }
+}
+@media (max-width: 768px) {
+  .workspace-main .feature-page { padding: 28px 16px 40px !important; }
+  .workspace-main .journal-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-topbar { padding-inline: 12px; gap: 8px; }
+  .studio-wordmark { gap: 8px; }
+  .studio-toolbar { gap: 6px; }
+  .topbar-log { padding-inline: 9px; }
+  .studio-account { display: flex; }
+  .workspace-main .studio-panel-heading { gap: 10px; }
+  .workspace-main .studio-panel-heading > span { white-space: normal; }
+  .playbook-header { padding: 16px; }
+  .workspace-main .settings-card { padding: 18px; }
+}
+@media (max-width: 480px) {
+  .workspace-main .form-columns { grid-template-columns: minmax(0, 1fr) !important; }
+  .workspace-main .card { padding: 18px; }
+  .workspace-main .journal-summary > div { padding: 12px !important; overflow-wrap: anywhere; }
+  .workspace-main .studio-segments button { padding-inline: 6px; }
+  .workspace-main .metric-number, .workspace-main .featured-metric .metric-number { font-size: 24px; white-space: normal; overflow-wrap: anywhere; }
+  .trade-edit-dialog { padding: 18px; }
+  .studio-wordmark > a { font-size: 18px; }
+  .topbar-log { gap: 4px; }
+}

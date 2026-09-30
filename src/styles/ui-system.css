@@ -1,0 +1,195 @@
+/* UI 3: shared controls and theme roles. Screen composition remains with UI 4/5. */
+:root {
+  --ui-canvas: #0d1013;
+  --ui-panel: #14181d;
+  --ui-raised: #1b2027;
+  --ui-popover: #20262e;
+  --ui-field: #101419;
+  --ui-line: #68798c;
+  --ui-focus: #f1b657;
+  --ui-selected: #f1b65726;
+  --ui-shadow: 0 18px 48px #0008;
+  --ui-danger-soft: #f0808615;
+  --ui-success-soft: #67dfa015;
+  --surface-panel: var(--ui-panel);
+  --surface-border: var(--border);
+  --radius: 11px;
+  --radius-sm: 9px;
+  color-scheme: dark;
+}
+:root[data-theme=light] {
+  color-scheme: light;
+  --bg-primary: #f5f3ee;
+  --bg-card: #fcfbf8;
+  --bg-elevated: #eeeae2;
+  --bg-hover: #e8e3d9;
+  --accent: #8b510b;
+  --accent-hover: #854b08;
+  --accent-soft: #f5dfb8;
+  --green: #176743;
+  --red: #aa3f48;
+  --yellow: #8c5a0b;
+  --blue: #315a9c;
+  --text-primary: #20262c;
+  --text-secondary: #47515b;
+  --text-muted: #58636d;
+  --border: #c9c4ba;
+  --border-subtle: #dedad1;
+  --ui-canvas: #f5f3ee;
+  --ui-panel: #fcfbf8;
+  --ui-raised: #eeeae2;
+  --ui-popover: #fffefa;
+  --ui-field: #fffefa;
+  --ui-line: #7d7a73;
+  --ui-focus: #8b510b;
+  --ui-selected: #f6e3c2;
+  --ui-shadow: 0 18px 48px #24201b2b;
+  --ui-danger-soft: #aa3f480d;
+  --ui-success-soft: #1767430d;
+}
+html, body { background: var(--ui-canvas); }
+::selection { background: var(--ui-selected); color: var(--text-primary); }
+body { font-family: 'Inter', sans-serif; }
+h1, h2, h3 { font-family: 'Inter', sans-serif; }
+.btn-primary, .btn-secondary, .btn-danger { min-height: 44px; border-radius: 9px; }
+.brand { --brand-mark: var(--accent); }
+.brand-ivory { --brand-mark: #f5f3ee; }
+body :is(input, select, textarea) { color-scheme: inherit; }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) {
+  --surface-panel: var(--ui-panel);
+  --surface-border: var(--border);
+}
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(.btn-primary, .btn-secondary, .btn-danger) { min-height: 44px; border-radius: 9px; }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea, select):not([type=checkbox]):not([type=radio]) { background: var(--ui-field); border: 1px solid var(--ui-line); border-radius: 9px; min-height: 44px; color: var(--text-primary); }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea)::placeholder { color: var(--text-muted); }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea):focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea)[aria-invalid=true] { border-color: var(--red); }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea):disabled { opacity: .55; }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea):not(:disabled):not([aria-invalid=true]):hover { border-color: var(--accent); }
+/* Validation state stays visible while keyboard focus has its own outer ring. */
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(input, textarea)[aria-invalid=true]:focus { border-color: var(--red) !important; }
+.field-label { display: block; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+.field-hint { display: block; margin-top: 8px; color: var(--text-muted); font-size: 12px; }
+.field-success { display: block; margin-top: 8px; color: var(--green); font-size: 12px; }
+.ui-feedback { padding: 12px 16px; border: 1px solid var(--ui-line); border-radius: 9px; overflow-wrap: anywhere; }
+.ui-feedback-error { color: var(--red); border-color: var(--red); background: var(--ui-danger-soft); }
+.ui-feedback-success { color: var(--green); border-color: var(--green); background: var(--ui-success-soft); }
+:is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) :is(.card, .studio-panel, .playbook-section, .journal-filters, .journal-table-panel) { background: var(--ui-panel); border-color: var(--border); border-radius: 11px; box-shadow: 0 4px 18px #0000000b; }
+.studio-popover, .chart-tooltip, .studio-chart-tooltip, .expert-dialog, .trade-edit-dialog { background: var(--ui-popover); border-color: var(--ui-line); color: var(--text-primary); box-shadow: var(--ui-shadow); }
+.apex-select { display: inline-block; min-width: 0; max-width: 100%; vertical-align: middle; padding: 0 !important; border: 0 !important; background: none !important; }
+.apex-select > .apex-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid var(--ui-line); border-radius: 9px; background: var(--ui-field); color: var(--text-primary); font-size: 12px; text-align: left; line-height: 1.3; }
+.apex-select-trigger:hover { border-color: var(--accent); }
+.apex-select-trigger:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.apex-select-trigger[aria-expanded=true] { border-color: var(--accent); background: var(--ui-raised); }
+.apex-select-trigger[aria-invalid=true] { border-color: var(--red); }
+.apex-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apex-select-trigger svg { color: var(--text-secondary); }
+.apex-select-trigger:disabled { opacity: .55; }
+.apex-popover, .apex-popover.studio-popover { position: fixed; z-index: 300; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-popover); box-shadow: var(--ui-shadow); color: var(--text-primary); }
+.apex-select-popup { padding: 4px; }
+.apex-select-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 9px 11px; border: 0; border-radius: 7px; background: transparent; color: var(--text-primary); font-size: 12px; text-align: left; overflow-wrap: anywhere; }
+.apex-select-option.is-active, .apex-select-option:hover { background: var(--bg-hover); }
+.apex-select-option[aria-selected=true] { background: var(--ui-selected); color: var(--accent); font-weight: 600; }
+.apex-select-option.is-active { outline: 1px solid var(--ui-focus); outline-offset: -2px; }
+.apex-select-option:focus-visible { outline-offset: -2px; }
+.apex-select-option:disabled { opacity: .5; }
+.apex-select-option:disabled:hover { background: transparent; }
+.apex-select-trigger, .apex-select-option { touch-action: manipulation; }
+.studio-date { border: 0; background: transparent; padding: 0; gap: 7px; }
+.studio-date > .apex-select { width: 175px; }
+.studio-date .apex-select-trigger { min-height: 44px; }
+.focus-picker > .apex-select { min-width: 140px; }
+.focus-picker .apex-select-trigger { min-height: 44px; }
+.focus-picker .apex-select-trigger svg { position: static; pointer-events: none; }
+.journal-filters > .apex-select { max-width: min(100%, 210px); }
+.assistant-field > .apex-select, .setting-row > .apex-select, .form-columns .apex-select, .trade-edit-dialog .apex-select { width: 100%; }
+.setting-row > .apex-select { width: min(100%, 185px); flex-shrink: 0; }
+.studio-panel-heading > .apex-select { min-width: 140px; }
+.studio-toolbar .toolbar-control, .studio-account > .toolbar-control, .studio-popover :is(a, button), .topbar-log { min-height: 44px; }
+.studio-account > .toolbar-control { min-width: 44px; }
+.studio-popover :is(a, button):hover { background: var(--bg-hover); }
+.workspace-main .studio-segments button, .journal-filters > button, .workspace-main .focus-item, .voice-choice-options label, .assistant-option, button[aria-pressed] { min-height: 44px; }
+.icon-button, .expert-icon-button, .playbook-delete, .assistant-send { min-height: 44px; min-width: 44px; }
+.voice-trade-input button, .message-play, .assistant-mic, .assistant-error button, .assistant-voice-strip button, .assistant-timing-heading button { min-height: 44px; min-width: 44px; }
+.workspace-main form button { min-height: 44px; }
+.rail-avatar, .trade-open { min-width: 44px; min-height: 44px; }
+.settings-card .btn-primary { min-width: 110px; }
+.voice-choice-options label.is-selected { background: var(--ui-selected); }
+.field-error { display: block; margin-top: 8px; color: var(--red); font-size: 12px; }
+:is(input, textarea, select, button):disabled { cursor: not-allowed; }
+button:disabled:hover { transform: none; }
+.chart-ending { background: var(--ui-popover); border-color: var(--ui-line); }
+:root[data-theme=light] .studio-trade-table td:first-child small, :root[data-theme=light] .trade-open { color: var(--text-secondary); }
+:root[data-theme=light] .studio-trade-table th { border-color: var(--border); }
+:root[data-theme=light] .studio-rail, :root[data-theme=light] .studio-topbar { background: var(--ui-panel); border-color: var(--border); }
+:root[data-theme=light] :is(.workspace-main, .auth-page, .expert-dialog, .trade-edit-dialog) { --text-muted: #58636d; }
+:root[data-theme=light] .workspace-main .eyebrow { color: var(--accent); }
+:root[data-theme=light] .studio-wordmark > a, :root[data-theme=light] .brand { color: var(--text-primary); }
+:root[data-theme=light] .rail-link { color: var(--text-secondary); }
+:root[data-theme=light] .rail-link:hover, :root[data-theme=light] .rail-link.active { color: var(--accent); background: var(--ui-selected); }
+:root[data-theme=light] .studio-demo, :root[data-theme=light] .toolbar-control { background: var(--ui-raised); border-color: var(--border); color: var(--text-primary); }
+:root[data-theme=light] .studio-hero::before { opacity: .14; }
+:root[data-theme=light] .studio-hero :is(p, blockquote, cite), :root[data-theme=light] .studio-greeting { color: var(--text-secondary); }
+:root[data-theme=light] .studio-stats { background: var(--ui-panel); border-color: var(--border); }
+:root[data-theme=light] .studio-metric { border-color: var(--border-subtle); }
+:root[data-theme=light] .studio-metric-label, :root[data-theme=light] .studio-stat-note, :root[data-theme=light] .studio-trade-table th { color: var(--text-secondary); }
+:root[data-theme=light] .studio-trade-table td { border-color: var(--border-subtle); }
+:root[data-theme=light] .studio-review-card { background: #ede5d9; border-color: var(--border); box-shadow: 0 4px 18px #00000012; }
+:root[data-theme=light] .studio-review-card::after { background: linear-gradient(90deg, #ede5d9fa, #ede5d9dd 57%, transparent); }
+:root[data-theme=light] .studio-review-card :is(h2, strong) { color: var(--text-primary); }
+:root[data-theme=light] .studio-review-card :is(p, small) { color: var(--text-secondary); }
+:root[data-theme=light] .studio-prism { opacity: .25; mix-blend-mode: multiply; }
+:root[data-theme=light] .studio-segments { background: var(--ui-raised); border-color: var(--border); }
+:root[data-theme=light] .studio-segments button { color: var(--text-secondary); }
+:root[data-theme=light] .studio-segments button.active { color: var(--accent); background: var(--ui-selected); border-color: var(--accent); }
+:root[data-theme=light] .studio-focus .focus-item { color: var(--text-primary); }
+:root[data-theme=light] .studio-focus .focus-check { background: var(--ui-field); border-color: var(--ui-line); }
+:root[data-theme=light] .focus-item input:checked + .focus-check { background: var(--ui-selected); border-color: var(--accent); }
+:root[data-theme=light] .workspace-main .btn-secondary, :root[data-theme=light] .auth-page .btn-secondary { background: var(--ui-panel); border-color: var(--ui-line); }
+:root[data-theme=light] .workspace-main .btn-secondary:hover, :root[data-theme=light] .auth-page .btn-secondary:hover { background: var(--bg-hover); }
+:root[data-theme=light] .btn-primary, :root[data-theme=light] .workspace-main .btn-primary, :root[data-theme=light] .auth-page .btn-primary, :root[data-theme=light] .expert-dialog .btn-primary { background: #e9ad55; border-color: #be7c22; color: #261805; }
+:root[data-theme=light] .btn-primary:hover, :root[data-theme=light] .workspace-main .btn-primary:hover, :root[data-theme=light] .auth-page .btn-primary:hover, :root[data-theme=light] .expert-dialog .btn-primary:hover { background: #f4bd70; }
+:root[data-theme=light] .workspace-main .analytics-stat, :root[data-theme=light] .workspace-main .empty-state { background: var(--ui-panel); border-color: var(--border); }
+:root[data-theme=light] .workspace-main .journal-summary > div { border-color: var(--border) !important; }
+:root[data-theme=light] .trade-edit-dialog::backdrop { background: #24201b99; }
+:root[data-theme=light] .skeleton { background-image: linear-gradient(90deg, #e8e3d9 25%, #d5cfc4 50%, #e8e3d9 75%); }
+:root[data-theme=light] .workspace-main .assistant-chat, :root[data-theme=light] .assistant-composer, :root[data-theme=light] .expert-call-body, :root[data-theme=light] .expert-caption { background: var(--ui-panel); border-color: var(--border); }
+:root[data-theme=light] :is(.assistant-prompts button, .assistant-mic) { color: var(--text-primary); background: var(--ui-raised); border-color: var(--ui-line); }
+:root[data-theme=light] .assistant-prompts button:hover { background: var(--bg-hover); }
+:root[data-theme=light] :is(.message-body, .assistant-option, .voice-choice legend, .voice-choice-options label, .expert-call-body) { color: var(--text-primary); }
+:root[data-theme=light] :is(.assistant-context-summary, .assistant-voice-strip, .expert-call-context, .expert-call-stage > p, .expert-call-timer, .expert-caption p, .expert-control, .expert-call-footer, .expert-call-footer p, .expert-call-header h2 span) { color: var(--text-secondary); }
+:root[data-theme=light] :is(.assistant-voice-notice, .expert-voice-notice, .expert-caption > span) { color: var(--yellow); }
+:root[data-theme=light] :is(.assistant-error, .expert-call-error) { color: var(--red); border-color: var(--red); }
+:root[data-theme=light] .expert-control:not(.expert-end) > span { background: var(--ui-raised); border-color: var(--ui-line); color: var(--text-primary); }
+:root[data-theme=light] .expert-icon-button { color: var(--text-primary); border-color: var(--ui-line); }
+:root[data-theme=light] .expert-icon-button:hover { background: var(--bg-hover); }
+/* Portrait artwork retains its dark photographic treatment in either theme. */
+:root[data-theme=light] :is(.expert-card h2, .expert-portrait-copy h2) { color: #f1f3f8; }
+:root[data-theme=light] .expert-dialog { background: var(--ui-popover); }
+/* The selected landing composition remains readable with the warm ivory theme. */
+:root[data-theme=light] .al-page { color-scheme: light; background: var(--ui-canvas); color: var(--text-primary); }
+:root[data-theme=light] .al-nav, :root[data-theme=light] .al-section, :root[data-theme=light] .al-footer { border-color: var(--border); }
+:root[data-theme=light] .al-nav :is(nav a, .al-signin), :root[data-theme=light] .al-page :is(.al-lead, .al-footnote, .al-panel-caption, .al-caption),
+:root[data-theme=light] .al-section-heading > p, :root[data-theme=light] .al-routine p, :root[data-theme=light] .al-section-copy > p:not(.al-eyebrow),
+:root[data-theme=light] .al-draft-note p, :root[data-theme=light] .al-comparison p, :root[data-theme=light] .al-comparison strong small,
+:root[data-theme=light] .al-chat-answer small, :root[data-theme=light] .al-chat-answer .al-chat-caveat, :root[data-theme=light] .al-faq details > p,
+:root[data-theme=light] .al-closing > p, :root[data-theme=light] .al-footer { color: var(--text-secondary); }
+:root[data-theme=light] .al-page .al-eyebrow, :root[data-theme=light] .al-step-top, :root[data-theme=light] .al-routine small { color: var(--accent); }
+:root[data-theme=light] .al-hero h1 span, :root[data-theme=light] .al-text-link { color: var(--accent) !important; }
+:root[data-theme=light] .al-secondary { background: var(--ui-panel); border-color: var(--ui-line); color: var(--text-primary); }
+:root[data-theme=light] .al-secondary:hover { background: var(--bg-hover); }
+:root[data-theme=light] .al-panel, :root[data-theme=light] .al-conversation { background: var(--ui-panel); border-color: var(--border); box-shadow: 0 12px 32px #24201b1a; }
+:root[data-theme=light] .al-trade-values, :root[data-theme=light] .al-draft-note, :root[data-theme=light] .al-insight dl, :root[data-theme=light] .al-conversation > .al-caption { border-color: var(--border); }
+:root[data-theme=light] .al-trade-values dt, :root[data-theme=light] .al-reflection > span, :root[data-theme=light] .al-insight dt { color: var(--text-secondary); }
+:root[data-theme=light] .al-pnl dd { color: var(--green); }
+:root[data-theme=light] .al-long { color: var(--green); background: #e4f2e8; border-color: #9fcbb0; }
+:root[data-theme=light] .al-planned { color: var(--blue); background: #e5ebf6; border-color: #b2c4de; }
+:root[data-theme=light] .al-insight dl > div + div, :root[data-theme=light] .al-routine li, :root[data-theme=light] .al-faq details { border-color: var(--border); }
+:root[data-theme=light] .al-draft-tags span, :root[data-theme=light] .al-chat-question { background: var(--ui-raised); border-color: var(--border); color: var(--text-primary); }
+:root[data-theme=light] .al-comparison > div > span, :root[data-theme=light] .al-coach-label, :root[data-theme=light] .al-chat-question > span, :root[data-theme=light] .al-faq summary > span { color: var(--text-secondary); }
+@media (max-width: 768px) {
+  .studio-date > .apex-select { width: 150px; }
+  .journal-filters > .apex-select { max-width: 100%; }
+}
+@media (max-width: 480px) { .studio-date > .apex-select { width: 100%; flex: 1; } }
+@media (prefers-reduced-motion: reduce) { .apex-select-popup { scroll-behavior: auto; } }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { num, calcRR, calcPnl, getResult } from './math'
+import { num, calcRR, calcPnl, calcRisk, realisedR, getResult } from './math'
 
 describe('num', () => {
     it('treats empty and nullish as "not provided"', () => {
@@ -34,19 +34,44 @@ describe('calcRR', () => {
 })
 
 describe('calcPnl', () => {
-    it('applies the percentage move to notional size', () => {
-        // +10% on 1000 notional
-        expect(calcPnl('LONG', 100, 110, 1000)).toBe(100)
-        // short from 100 to 90 is +10%
-        expect(calcPnl('SHORT', 100, 90, 1000)).toBe(100)
+    it('multiplies the price move by units', () => {
+        // 50 shares from 100 to 110
+        expect(calcPnl('LONG', 100, 110, 50)).toBe(500)
+        // short 0.5 BTC from 68000 to 66000
+        expect(calcPnl('SHORT', 68000, 66000, 0.5)).toBe(1000)
     })
     it('is negative when the trade went the wrong way', () => {
-        expect(calcPnl('LONG', 100, 90, 1000)).toBe(-100)
-        expect(calcPnl('SHORT', 100, 110, 1000)).toBe(-100)
+        expect(calcPnl('LONG', 100, 90, 50)).toBe(-500)
+        expect(calcPnl('SHORT', 100, 110, 50)).toBe(-500)
     })
-    it('returns null until entry, exit and size are all present', () => {
+    it('subtracts fees, which can turn a scratch into a loss', () => {
+        expect(calcPnl('LONG', 100, 110, 50, 20)).toBe(480)
+        expect(calcPnl('LONG', 100, 100, 50, '12.5')).toBe(-12.5)
+        expect(calcPnl('LONG', 100, 110, 50, '')).toBe(500)
+    })
+    it('handles lot-based units, e.g. 2 lots of 75', () => {
+        expect(calcPnl('LONG', 22400, 22450, 150, 40)).toBe(7460)
+    })
+    it('returns null until entry, exit and units are all present', () => {
         expect(calcPnl('LONG', 100, 110, null)).toBeNull()
-        expect(calcPnl('LONG', 100, null, 1000)).toBeNull()
+        expect(calcPnl('LONG', 100, null, 50)).toBeNull()
+    })
+})
+
+describe('calcRisk and realisedR', () => {
+    it('measures the amount at risk from the stop', () => {
+        expect(calcRisk('LONG', 100, 95, 50)).toBe(250)
+        expect(calcRisk('SHORT', 100, 104, 10)).toBe(40)
+    })
+    it('has no risk without a valid stop', () => {
+        expect(calcRisk('LONG', 100, null, 50)).toBeNull()
+        expect(calcRisk('LONG', 100, 105, 50)).toBeNull()
+    })
+    it('expresses P&L in multiples of the risk', () => {
+        expect(realisedR({ direction: 'LONG', entry: 100, sl: 95, units: 50, pnl: 500 })).toBe(2)
+        expect(realisedR({ direction: 'LONG', entry: 100, sl: 95, units: 50, pnl: -250 })).toBe(-1)
+        expect(realisedR({ direction: 'LONG', entry: 100, sl: null, units: 50, pnl: 500 })).toBeNull()
+        expect(realisedR({ direction: 'LONG', entry: 100, sl: 95, units: 50, pnl: null })).toBeNull()
     })
 })
 
@@ -59,14 +84,5 @@ describe('getResult', () => {
     it('returns null for an unclosed trade', () => {
         expect(getResult(null)).toBeNull()
         expect(getResult(undefined)).toBeNull()
-    })
-})
-
-describe('round trip', () => {
-    it('agrees with the seeded demo data convention', () => {
-        const entry = 68400, exit = 71500, size = 5000
-        const pnl = calcPnl('LONG', entry, exit, size)
-        expect(pnl).toBe(+(((exit - entry) / entry) * size).toFixed(2))
-        expect(getResult(pnl)).toBe('WIN')
     })
 })

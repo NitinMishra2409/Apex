@@ -1,0 +1,7 @@
+.voice-trade-input { border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-panel); padding: 16px; }
+.voice-trade-input button { min-height: 44px; border-radius: 8px !important; }
+.voice-trade-input button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.voice-trade-input p { overflow-wrap: anywhere; }
+@media (max-width: 600px) { .voice-trade-input { padding: 14px; } }
+@media (prefers-reduced-motion: reduce) { .voice-trade-input * { animation: none !important; } }
+html[data-motion='reduced'] .voice-trade-input * { animation: none !important; }

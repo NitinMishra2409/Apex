@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normaliseSymbol, formatSymbol, baseAsset, symbolsInTrades } from './symbols'
+import { normaliseSymbol, formatSymbol, baseAsset, symbolsInTrades, guessAssetClass } from './symbols'
 
 describe('normaliseSymbol', () => {
     it('collapses every written form of the same pair', () => {
@@ -36,6 +36,16 @@ describe('normaliseSymbol', () => {
         expect(normaliseSymbol('PEPE')).toBe('PEPEUSDT')
     })
 
+    it('does not invent a crypto quote for other asset classes', () => {
+        expect(normaliseSymbol('nifty')).toBe('NIFTY')
+        expect(normaliseSymbol('Bank Nifty')).toBe('BANKNIFTY')
+        expect(normaliseSymbol('AAPL')).toBe('AAPL')
+        expect(normaliseSymbol('apple')).toBe('AAPL')
+        expect(normaliseSymbol('eur/usd')).toBe('EURUSD')
+        expect(normaliseSymbol('gold')).toBe('XAUUSD')
+        expect(normaliseSymbol('reliance')).toBe('RELIANCE')
+    })
+
     it('rejects junk rather than inventing a symbol', () => {
         expect(normaliseSymbol('')).toBeNull()
         expect(normaliseSymbol(null)).toBeNull()
@@ -50,6 +60,12 @@ describe('formatSymbol', () => {
     it('splits the quote off for display', () => {
         expect(formatSymbol('BTCUSDT')).toBe('BTC/USDT')
         expect(formatSymbol('ETHBTC')).toBe('ETH/BTC')
+        expect(formatSymbol('EURUSD')).toBe('EUR/USD')
+        expect(formatSymbol('XAUUSD')).toBe('XAU/USD')
+    })
+    it('leaves stocks and indices whole', () => {
+        expect(formatSymbol('NIFTY')).toBe('NIFTY')
+        expect(formatSymbol('AAPL')).toBe('AAPL')
     })
     it('is empty for nothing', () => {
         expect(formatSymbol(null)).toBe('')
@@ -78,5 +94,19 @@ describe('symbolsInTrades', () => {
     it('ignores trades with no symbol', () => {
         expect(symbolsInTrades([{ symbol: null }, {}])).toEqual([])
         expect(symbolsInTrades()).toEqual([])
+    })
+})
+
+describe('guessAssetClass', () => {
+    it('recognises crypto pairs and forex pairs', () => {
+        expect(guessAssetClass('BTCUSDT')).toBe('crypto')
+        expect(guessAssetClass('ETH')).toBe('crypto')
+        expect(guessAssetClass('EURUSD')).toBe('forex')
+        expect(guessAssetClass('USDINR')).toBe('forex')
+    })
+    it('does not guess for stocks, indices or unknowns', () => {
+        expect(guessAssetClass('NIFTY')).toBeNull()
+        expect(guessAssetClass('AAPL')).toBeNull()
+        expect(guessAssetClass('')).toBeNull()
     })
 })

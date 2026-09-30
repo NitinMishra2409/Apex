@@ -1,86 +1,64 @@
 import { supabase } from '../../platform/supabase/client'
 import { DEMO, demoDb, demoCommit, demoDelay } from '../../platform/demo/store'
-import { CHECKLIST_TYPES } from '../../domain/checklists/vocabulary'
+import { CHECKLIST_DEFAULTS, CHECKLIST_TYPES, DAILY_CHECKLIST_TYPES } from '../../domain/checklists/vocabulary'
+import { dayKey } from '../../domain/journal/reporting'
 
-const todayISO = () => new Date().toISOString().split('T')[0]
+// Daily progress is keyed by the trader's LOCAL date, so it resets at their midnight.
+const today = () => dayKey(new Date())
+const assertDaily = type => { if (!DAILY_CHECKLIST_TYPES.includes(type)) throw new Error(`${type} checklists are ticked per trade, not per day.`) }
 
+/** The playbook items for one checklist type. Falls back to the defaults until the trader edits them. */
 export async function getChecklist(userId, type) {
     if (DEMO) {
         await demoDelay()
-        return demoDb().checklists[type] ?? []
+        return demoDb().checklists[type] ?? CHECKLIST_DEFAULTS[type]
     }
-    // Try to fetch existing
-    const { data, error } = await supabase
-        .from('checklists')
-        .select('items')
-        .eq('user_id', userId)
-        .eq('type', type)
-        .maybeSingle()
-
+    const { data, error } = await supabase.from('checklists').select('items').eq('user_id', userId).eq('type', type).maybeSingle()
     if (error) throw error
-    if (data) return data.items ?? []
-
-    // Upsert default empty checklist
-    const { data: created, error: upsertErr } = await supabase
-        .from('checklists')
-        .upsert({ user_id: userId, type, items: [] }, { onConflict: 'user_id,type' })
-        .select('items')
-        .single()
-
-    if (upsertErr) throw upsertErr
-    return created.items ?? []
+    return data ? data.items ?? [] : CHECKLIST_DEFAULTS[type]
 }
 
 export async function saveChecklistItems(userId, type, items) {
     if (DEMO) {
         await demoDelay()
-        const store = demoDb()
-        store.checklists[type] = items
+        demoDb().checklists[type] = items
         demoCommit()
         return { user_id: userId, type, items }
     }
     const { data, error } = await supabase
         .from('checklists')
-        .upsert(
-            { user_id: userId, type, items, updated_at: new Date().toISOString() },
-            { onConflict: 'user_id,type' }
-        )
+        .upsert({ user_id: userId, type, items, updated_at: new Date().toISOString() }, { onConflict: 'user_id,type' })
         .select()
         .single()
     if (error) throw error
     return data
 }
 
-export async function getDailyProgress(userId, type) {
+export async function getDailyProgress(userId, type, date = today()) {
+    assertDaily(type)
     if (DEMO) {
         await demoDelay()
-        return demoDb().dailyProgress[`${todayISO()}|${type}`] ?? []
+        return demoDb().dailyProgress[`${date}|${type}`] ?? []
     }
     const { data, error } = await supabase
-        .from('daily_progress')
-        .select('checked_items')
-        .eq('user_id', userId)
-        .eq('date', todayISO())
-        .eq('type', type)
+        .from('daily_progress').select('checked_items')
+        .eq('user_id', userId).eq('date', date).eq('type', type)
         .maybeSingle()
     if (error) throw error
     return data?.checked_items ?? []
 }
 
-export async function saveDailyProgress(userId, type, checkedItems) {
+export async function saveDailyProgress(userId, type, checkedItems, date = today()) {
+    assertDaily(type)
     if (DEMO) {
         await demoDelay()
-        const store = demoDb()
-        store.dailyProgress[`${todayISO()}|${type}`] = checkedItems
+        demoDb().dailyProgress[`${date}|${type}`] = checkedItems
         demoCommit()
-        return { user_id: userId, type, date: todayISO(), checked_items: checkedItems }
+        return { user_id: userId, type, date, checked_items: checkedItems }
     }
     const { data, error } = await supabase
         .from('daily_progress')
-        .upsert(
-            { user_id: userId, type, date: todayISO(), checked_items: checkedItems },
-            { onConflict: 'user_id,date,type' }
-        )
+        .upsert({ user_id: userId, type, date, checked_items: checkedItems }, { onConflict: 'user_id,date,type' })
         .select()
         .single()
     if (error) throw error
@@ -88,44 +66,26 @@ export async function saveDailyProgress(userId, type, checkedItems) {
 }
 
 /**
- * Every checklist and today's progress for a user, in ONE round trip per table.
- *
- * The Dashboard previously called getChecklist() + getDailyProgress() for each
- * of the three types -- six sequential requests just to draw three progress
- * bars. This replaces them with two queries.
- *
- * @returns {Promise<{[type:string]: {items: string[], checked: string[]}}>}
+ * Every playbook plus today's progress for the daily ones, in one round trip per table.
+ * @returns {Promise<{[type:string]: {items: string[], checked: string[]}}>} per-trade entries have no daily progress
  */
-export async function getChecklistSummary(userId) {
-    const blank = () => Object.fromEntries(CHECKLIST_TYPES.map(t => [t, { items: [], checked: [] }]))
-
+export async function getChecklistSummary(userId, date = today()) {
+    const out = Object.fromEntries(CHECKLIST_TYPES.map(t => [t, { items: CHECKLIST_DEFAULTS[t], checked: [] }]))
     if (DEMO) {
         await demoDelay()
         const store = demoDb()
-        const today = todayISO()
-        const out = blank()
         for (const type of CHECKLIST_TYPES) {
-            out[type] = {
-                items: store.checklists[type] ?? [],
-                checked: store.dailyProgress[`${today}|${type}`] ?? [],
-            }
+            out[type] = { items: store.checklists[type] ?? CHECKLIST_DEFAULTS[type], checked: DAILY_CHECKLIST_TYPES.includes(type) ? store.dailyProgress[`${date}|${type}`] ?? [] : [] }
         }
         return out
     }
-
     const [listsRes, progressRes] = await Promise.all([
         supabase.from('checklists').select('type, items').eq('user_id', userId),
-        supabase.from('daily_progress').select('type, checked_items').eq('user_id', userId).eq('date', todayISO()),
+        supabase.from('daily_progress').select('type, checked_items').eq('user_id', userId).eq('date', date),
     ])
     if (listsRes.error) throw listsRes.error
     if (progressRes.error) throw progressRes.error
-
-    const out = blank()
-    for (const row of listsRes.data ?? []) {
-        if (out[row.type]) out[row.type].items = row.items ?? []
-    }
-    for (const row of progressRes.data ?? []) {
-        if (out[row.type]) out[row.type].checked = row.checked_items ?? []
-    }
+    for (const row of listsRes.data ?? []) if (out[row.type]) out[row.type].items = row.items ?? []
+    for (const row of progressRes.data ?? []) if (out[row.type]) out[row.type].checked = row.checked_items ?? []
     return out
 }

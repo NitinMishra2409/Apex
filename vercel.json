@@ -1,4 +1,5 @@
 {
+  "regions": ["bom1"],
   "rewrites": [
     {
       "source": "/(.*)",
@@ -7,20 +8,20 @@
   ],
   "functions": {
     "api/chat.js": {
-      "maxDuration": 180,
+      "maxDuration": 60,
+      "supportsCancellation": true
+    },
+    "api/checklist-match.js": {
+      "maxDuration": 10,
       "supportsCancellation": true
     },
     "api/speak.js": {
-      "maxDuration": 120,
-      "supportsCancellation": true
-    },
-    "api/listen.js": {
-      "includeFiles": "server/speech/proto/**",
-      "maxDuration": 150,
+      "maxDuration": 30,
       "supportsCancellation": true
     },
     "api/transcribe.js": {
-      "includeFiles": "server/speech/proto/**"
+      "maxDuration": 30,
+      "supportsCancellation": true
     }
   }
 }

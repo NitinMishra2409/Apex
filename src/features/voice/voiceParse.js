@@ -1,9 +1,11 @@
 // Turn a spoken trade description into New Trade form fields.
 //
 // Example: "long bitcoin at 68,000 with a stop at 67k, target 71500,
-//           size 5000, I FOMO'd the entry"
-//   -> { direction:'LONG', entry:68000, sl:67000, tp:71500, size:5000,
+//           quantity 0.05, fees 3, I FOMO'd the entry"
+//   -> { direction:'LONG', entry:68000, sl:67000, tp:71500, units:0.05, fees:3,
 //        mistakes:['FOMO Entry'] }
+//
+// Units can also trail the number: "50 shares", "2 lots of 75" (= 150).
 //
 // Deliberately conservative: a field is only filled when a recognised keyword
 // points at a number. Anything uncertain is left blank for the user to type.
@@ -90,7 +92,8 @@ export function wordsToNumbers(text) {
 const LABELS = [
     ['sl', ['stop loss', 'stoploss', 'stop-loss', 'stop out', 'stopped out', 'stop', 'sl']],
     ['tp', ['take profit', 'takeprofit', 'take-profit', 'target price', 'target', 'tp']],
-    ['size', ['position size', 'size of', 'size', 'position', 'notional']],
+    ['units', ['position size', 'size of', 'size', 'quantity', 'qty', 'units', 'position']],
+    ['fees', ['fees', 'fee', 'commission', 'brokerage', 'charges']],
     ['exit_price', ['exit price', 'exited at', 'exited', 'exit at', 'exit', 'closed at', 'close at', 'got out at', 'out at']],
     ['entry', ['entry price', 'entered at', 'entered', 'entry', 'enter at', 'bought at', 'sold at', 'got in at', 'filled at']],
 ]
@@ -101,7 +104,11 @@ const WEAK = new Set(['at', 'around', 'near', 'about', 'from', 'of', 'for', 'wit
 const SKIP = new Set(['a', 'an', 'the', 'and', 'my', 'i', 'was', 'is', 'to', 'usdt', 'usd', 'dollars', 'bucks', 'please', 'then'])
 
 const NUM_RE = /^-?\d+(?:\.\d+)?$/
-const DIRECTION_WORD = /^(?:long|longed|longing|bought|buy|buying|short|shorted|shorting|sold|sell|selling)$/
+// Nouns that make the number before them a quantity: "50 shares", "2 lots".
+const UNIT_NOUN = /^(?:shares?|units?|lots?|contracts?|coins?|tokens?)$/
+const FEE_NOUN = /^(?:fees?|commissions?|brokerage|charges)$/
+const CHECKLIST_WORD = /^(?:checklists?|checks?|ticks?|ticked)$/
+const DIRECTION_WORD =/^(?:long|longed|longing|bought|buy|buying|short|shorted|shorting|sold|sell|selling)$/
 
 function normalise(text) {
     return wordsToNumbers(
@@ -134,10 +141,17 @@ function detectDirection(text) {
 // real tickers but would fire constantly on normal speech, so they are only
 // recognised when a quote currency follows them ("link usdt").
 const PAIR_RE = /\b([a-z0-9]{2,10})\s*(?:\/|-|vs|against)?\s*(usdt|usdc|busd|fdusd|tusd|usd)\b/
-const ASSET_WORD_RE = /\b(bitcoin|ethereum|ether|solana|ripple|cardano|dogecoin|binance\s*coin|binance|polygon|avalanche|chainlink|polkadot|litecoin|arbitrum|optimism|aptos|celestia|injective|cosmos)\b/
+const ASSET_WORD_RE = /\b(bitcoin|ethereum|ether|solana|ripple|cardano|dogecoin|binance\s*coin|binance|polygon|avalanche|chainlink|polkadot|litecoin|arbitrum|optimism|aptos|celestia|injective|cosmos|bank\s*nifty|fin\s*nifty|nifty|sensex|reliance|infosys|tcs|hdfc\s*bank|apple|tesla|nvidia|microsoft|amazon|google|gold|silver)\b/
+const FOREX_RE = /\b(eur|usd|gbp|jpy|aud|cad|chf|nzd|inr|euro|dollar|pound|yen|rupee)\s*(?:\/|-|vs|against)?\s*(eur|usd|gbp|jpy|aud|cad|chf|nzd|inr|euro|dollar|pound|yen|rupee)\b/
+const FIAT_WORD = { euro: 'EUR', dollar: 'USD', pound: 'GBP', yen: 'JPY', rupee: 'INR' }
 const BARE_TICKER_RE = /\b(btc|xbt|eth|sol|xrp|bnb|doge|ada|avax|matic|ltc|arb|sui|apt|tia|inj)\b/
 
 function detectSymbol(text) {
+    const fx = text.match(FOREX_RE)
+    if (fx) {
+        const [a, b] = [fx[1], fx[2]].map(w => FIAT_WORD[w] ?? w.toUpperCase())
+        if (a !== b) return a + b
+    }
     const pair = text.match(PAIR_RE)
     if (pair) {
         const found = normaliseSymbol(`${pair[1]}${pair[2]}`)
@@ -202,6 +216,22 @@ export function parseTradeSpeech(transcript, extraMistakes = []) {
         const word = words[i]
 
         if (NUM_RE.test(word)) {
+            const next = words[i + 1] ?? ''
+            // "2 lots of 75" -> 150 units; "50 shares" -> 50 units.
+            if (UNIT_NOUN.test(next) && fields.units === undefined) {
+                const lotSize = /^lots?$/.test(next) && words[i + 2] === 'of' && NUM_RE.test(words[i + 3] ?? '') ? Number(words[i + 3]) : 1
+                fields.units = Number(word) * lotSize
+                i += lotSize === 1 ? 1 : 3
+                if (pending === 'units') pending = null
+                continue
+            }
+            // "20 in fees", "20 fees"
+            const trailingFee = (next === 'in' && FEE_NOUN.test(words[i + 2] ?? '')) || (FEE_NOUN.test(next) && !NUM_RE.test(words[i + 2] ?? ''))
+            if (trailingFee && fields.fees === undefined) {
+                fields.fees = Number(word)
+                i += next === 'in' ? 2 : 1
+                continue
+            }
             // Only accept a number that closely follows its keyword.
             if (pending && distance <= 4 && fields[pending] === undefined) {
                 fields[pending] = Number(word)
@@ -210,6 +240,9 @@ export function parseTradeSpeech(transcript, extraMistakes = []) {
             distance++
             continue
         }
+
+        // "checklist one, three" refers to checklist items, never to a price.
+        if (CHECKLIST_WORD.test(word)) { pending = null; continue }
 
         const hit = labelAt(i)
         if (hit) {
@@ -256,9 +289,9 @@ export function parseTradeSpeech(transcript, extraMistakes = []) {
     }
     if (mistakes.length) fields.mistakes = mistakes
 
-    const ORDER = ['symbol', 'direction', 'entry', 'exit_price', 'sl', 'tp', 'size', 'setup_type', 'mistakes']
+    const ORDER = ['symbol', 'direction', 'entry', 'exit_price', 'sl', 'tp', 'units', 'fees', 'setup_type', 'mistakes']
     const matched = ORDER.filter(k => fields[k] !== undefined)
-    const missing = ['entry', 'sl', 'tp', 'size'].filter(k => fields[k] === undefined)
+    const missing = ['entry', 'sl', 'tp', 'units'].filter(k => fields[k] === undefined)
 
     return { fields, matched, missing, direction, transcript: transcript ?? '', normalised: text }
 }
@@ -266,5 +299,5 @@ export function parseTradeSpeech(transcript, extraMistakes = []) {
 /** Human-readable label for a parsed field, used in the review panel. */
 export const FIELD_LABELS = {
     symbol: 'Asset', direction: 'Direction', entry: 'Entry', exit_price: 'Exit', sl: 'Stop Loss',
-    tp: 'Take Profit', size: 'Size', setup_type: 'Setup', mistakes: 'Mistakes',
+    tp: 'Take Profit', units: 'Units', fees: 'Fees', setup_type: 'Setup', mistakes: 'Mistakes',
 }

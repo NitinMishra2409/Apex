@@ -49,14 +49,38 @@ describe('Orpheus speech', () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private provider details', { status: 429 })))
         await expect(synthesize('Hello.', { GROQ_API_KEY: 'key' })).rejects.toMatchObject({ status: 429, code: 'SPEECH_UNAVAILABLE', message: 'Groq speech quota was reached. Try again shortly.' })
     })
-    it('serves local demo speech with no NVIDIA key or Supabase request', async () => {
+    const demoSpeechRequest = () => {
         const req = new EventEmitter()
         Object.assign(req, { method: 'POST', body: { text: 'Hello from your coach.' }, socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'localhost:5173', authorization: 'Bearer demo-access-token', 'x-apex-demo-session': 'speech-demo-session-001' } })
         allowLocalDemo(req, { VITE_DEMO_MODE: 'true' })
-        const res = new EventEmitter(); res.setHeader = vi.fn(); res.end = vi.fn()
-        const wav = wavFixture(), fetcher = vi.fn().mockResolvedValue(new Response(wav)); vi.stubGlobal('fetch', fetcher)
-        await speakHandler(req, res, { GROQ_API_KEY: 'key' })
+        return req
+    }
+    const streamingResponse = () => { const res = new EventEmitter(); res.setHeader = vi.fn(); res.write = vi.fn(); res.end = vi.fn(); return res }
+    it('streams local demo speech through as it arrives, with no Supabase request', async () => {
+        const wav = wavFixture()
+        // Deliver the WAV in pieces, the way Groq streams it.
+        const body = new ReadableStream({ start(c) { c.enqueue(wav.subarray(0, 8)); c.enqueue(wav.subarray(8, 30)); c.enqueue(wav.subarray(30)); c.close() } })
+        const fetcher = vi.fn().mockResolvedValue(new Response(body)); vi.stubGlobal('fetch', fetcher)
+        const res = streamingResponse()
+        await speakHandler(demoSpeechRequest(), res, { GROQ_API_KEY: 'key' })
         expect(res.statusCode).toBe(200); expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'audio/wav')
-        expect(res.end).toHaveBeenCalledWith(wav); expect(fetcher).toHaveBeenCalledTimes(1)
+        expect(res.setHeader.mock.calls.find(([name]) => name === 'Server-Timing')?.[1]).toMatch(/auth;dur=\d+\.\d, provider;dur=\d+\.\d/)
+        expect(Buffer.concat(res.write.mock.calls.map(c => c[0]))).toEqual(wav)
+        expect(res.write.mock.calls.length).toBeGreaterThan(1)
+        expect(res.end).toHaveBeenCalled(); expect(fetcher).toHaveBeenCalledTimes(1)
+    })
+    it('answers with a JSON error, not audio headers, when the provider sends something that is not WAV', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>oops</html>')))
+        const res = streamingResponse()
+        await speakHandler(demoSpeechRequest(), res, { GROQ_API_KEY: 'key' })
+        expect(res.statusCode).toBe(502); expect(res.write).not.toHaveBeenCalled()
+        expect(JSON.parse(res.end.mock.calls[0][0])).toMatchObject({ code: 'BAD_SPEECH' })
+    })
+    it('reports the first speech request timing when Groq is rate limited', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('busy', { status: 429 })))
+        const res = streamingResponse()
+        await speakHandler(demoSpeechRequest(), res, { GROQ_API_KEY: 'key' })
+        expect(res.statusCode).toBe(429)
+        expect(res.setHeader.mock.calls.find(([name]) => name === 'Server-Timing')?.[1]).toMatch(/auth;dur=\d+\.\d, provider;dur=\d+\.\d/)
     })
 })

@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Sun, Sunset, Moon } from 'lucide-react'
+import { Sun, Crosshair, Moon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/useAuth'
 import { getChecklist, saveChecklistItems, getDailyProgress, saveDailyProgress } from './repository'
-import { CHECKLIST_TYPES, CHECKLIST_LABELS, CHECKLIST_DEFAULTS as DEFAULTS } from '../../domain/checklists/vocabulary'
+import { CHECKLIST_TYPES, CHECKLIST_LABELS, DAILY_CHECKLIST_TYPES } from '../../domain/checklists/vocabulary'
+import { useLocalDay } from '../../shared/hooks/useLocalDay'
+import './checklists.css'
 
-const ICONS = { premarket: Sun, during: Sunset, posttrade: Moon }
+const ICONS = { premarket: Sun, trade: Crosshair, postmarket: Moon }
 
 const Bone = ({ w = '100%', h = 16 }) => <div style={{ width: w, height: h, borderRadius: 4 }} className="skeleton" />
 
-function ChecklistSection({ type, userId }) {
+function ChecklistSection({ type, userId, day }) {
+    const daily = DAILY_CHECKLIST_TYPES.includes(type)
     const [items, setItems] = useState([])
     const [checked, setChecked] = useState([])
     const [open, setOpen] = useState(true)
@@ -19,20 +22,17 @@ function ChecklistSection({ type, userId }) {
 
     useEffect(() => {
         if (!userId) return
-        Promise.all([getChecklist(userId, type), getDailyProgress(userId, type)])
-            .then(([its, prog]) => {
-                const base = its?.length ? its : DEFAULTS[type]
-                if (!its?.length) saveChecklistItems(userId, type, base).catch(() => { })
-                setItems(base); setChecked(prog ?? []); setLoading(false)
-            }).catch(() => setLoading(false))
-    }, [userId, type])
+        Promise.all([getChecklist(userId, type), daily ? getDailyProgress(userId, type, day) : []])
+            .then(([its, prog]) => { setItems(its ?? []); setChecked(prog ?? []); setLoading(false) })
+            .catch(() => setLoading(false))
+    }, [userId, type, daily, day])
 
     const saveProgress = useCallback(async (next) => {
         setSaving(true)
-        try { await saveDailyProgress(userId, type, next) }
+        try { await saveDailyProgress(userId, type, next, day) }
         catch (err) { toast.error(err.message) }
         finally { setSaving(false) }
-    }, [userId, type])
+    }, [userId, type, day])
 
     const toggle = (label) => {
         const next = checked.includes(label) ? checked.filter(c => c !== label) : [...checked, label]
@@ -51,7 +51,7 @@ function ChecklistSection({ type, userId }) {
     const deleteItem = async (label) => {
         const ni = items.filter(i => i !== label), nc = checked.filter(c => c !== label)
         setItems(ni); setChecked(nc)
-        try { await saveChecklistItems(userId, type, ni); await saveDailyProgress(userId, type, nc) }
+        try { await saveChecklistItems(userId, type, ni); if (daily) await saveDailyProgress(userId, type, nc, day) }
         catch (err) { toast.error(err.message) }
     }
 
@@ -62,21 +62,23 @@ function ChecklistSection({ type, userId }) {
     const barColor = pct === 100 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)'
 
     return (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '0.9rem', overflow: 'hidden', transition: 'border-color 0.15s' }}>
+        <section className={`playbook-section ${daily ? 'playbook-daily' : 'playbook-template'}`}>
             {/* Header */}
-            <button aria-expanded={open} onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer', borderBottom: open ? '1px solid var(--border)' : 'none', transition: 'background 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)' }} onMouseLeave={e => { e.currentTarget.style.background = 'none' }}>
-                <Icon size={19} color="var(--accent)" />
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'left' }}>{CHECKLIST_LABELS[type]}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: barColor, minWidth: 30 }}>{loading ? '…' : `${done}/${total}`}</span>
-                <div style={{ width: 72, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 2, transition: 'width 0.4s ease' }} />
-                </div>
+            <h2 className="playbook-title"><button className="playbook-header" aria-expanded={open} aria-controls={`playbook-${type}`} onClick={() => setOpen(o => !o)}>
+                <Icon size={20} color="var(--accent)" aria-hidden="true" />
+                <span className="playbook-name" style={{ flex: 1, minWidth: 120 }}>{CHECKLIST_LABELS[type]}<small>{daily ? 'Today’s progress' : loading ? 'Loading checks…' : `${total} checks · ticked on each trade`}</small></span>
+                {daily ? <>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: barColor, minWidth: 30 }}>{loading ? '…' : `${done}/${total}`}</span>
+                    <span aria-hidden="true" style={{ width: 72, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
+                        <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 2 }} />
+                    </span>
+                </> : null}
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
-            </button>
+            </button></h2>
 
             {open && (
-                <div style={{ padding: '0.25rem 1.25rem 1rem' }}>
+                <div id={`playbook-${type}`} style={{ padding: '0.25rem 1.25rem 1rem' }}>
+                    {!daily && <p style={{ color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.5, padding: '0.75rem 0 0.25rem' }}>Run this before every trade. You tick it on <strong>Log trade</strong>, by tapping or by saying “checklist one, three” while dictating. A trade logged with nothing ticked is marked <strong>Unplanned</strong>.</p>}
                     {loading
                         ? <div style={{ padding: '0.75rem 0' }}>{[...Array(3)].map((_, i) => <Bone key={i} h={18} style={{ marginBottom: 12, opacity: 1 - i * 0.25 }} />)}</div>
                         : items.length === 0
@@ -84,19 +86,10 @@ function ChecklistSection({ type, userId }) {
                             : items.map(label => {
                                 const isChecked = checked.includes(label)
                                 return (
-                                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.7rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                                        <button role="checkbox" aria-checked={isChecked} aria-label={label} onClick={() => toggle(label)} disabled={saving} style={{
-                                            flexShrink: 0, width: 20, height: 20, borderRadius: 5,
-                                            border: `2px solid ${isChecked ? 'var(--accent)' : 'var(--border)'}`,
-                                            background: isChecked ? 'var(--accent)' : 'transparent',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            padding: 0, transition: 'all 0.18s',
-                                        }}>
-                                            {isChecked && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 5.5l2.5 2.5 4.5-4.5" stroke="#0d0d12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                                        </button>
-                                        <span style={{ flex: 1, fontSize: 13, color: isChecked ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isChecked ? 'line-through' : 'none', transition: 'all 0.2s' }}>{label}</span>
-                                        <button aria-label={`Delete ${label}`} onClick={() => deleteItem(label)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 5px', borderRadius: 4, lineHeight: 1, transition: 'color 0.12s' }}
-                                            onMouseEnter={e => { e.target.style.color = 'var(--red)' }} onMouseLeave={e => { e.target.style.color = 'var(--text-muted)' }}>✕</button>
+                                    <div key={label} className="playbook-item">
+                                        {daily ? <label className="playbook-check"><input type="checkbox" checked={isChecked} onChange={() => toggle(label)} disabled={saving} /><span>{label}</span></label>
+                                            : <><span style={{ color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{items.indexOf(label) + 1}</span><span style={{ flex: 1 }}>{label}</span></>}
+                                        <button className="playbook-delete" aria-label={`Delete ${label}`} onClick={() => deleteItem(label)}>×</button>
                                     </div>
                                 )
                             })
@@ -107,26 +100,27 @@ function ChecklistSection({ type, userId }) {
                     </div>
                 </div>
             )}
-        </div>
+        </section>
     )
 }
 
 export default function Checklists() {
     const { user } = useAuth()
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    const day = useLocalDay()
+    const today = new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
     return (
         <div className="feature-page checklists-page" style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '1.5rem 1.25rem' }}>
-            <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
             <div style={{ maxWidth: 900, margin: '0 auto' }}>
                 <div style={{ marginBottom: '1.5rem' }}>
                     <div className="eyebrow">CONSISTENCY IS A PRACTICE</div><h1 style={{ marginTop: 8, marginBottom: 8 }}>Your daily routine<span className="heading-dot">.</span></h1><p className="page-subtitle" style={{ marginBottom: 8 }}>Prepare with intention. Trade with discipline. Reflect with honesty.</p>
                     <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{today}</p>
                 </div>
                 {CHECKLIST_TYPES.map(type => (
-                    <ChecklistSection key={type} type={type} userId={user?.id} />
+                    <ChecklistSection key={type} type={type} userId={user?.id} day={day} />
                 ))}
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem' }}>
-                    Progress resets daily. Items are saved to your account permanently.
+                    Pre-market and post-market progress resets at midnight in your time zone ({zone}). Checklist items are saved to your account.
                 </p>
             </div>
         </div>

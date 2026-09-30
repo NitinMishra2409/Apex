@@ -12,8 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.4",
-    "@grpc/proto-loader": "^0.8.1",
     "@supabase/supabase-js": "^2.97.0",
     "easy-speech": "^2.4.0",
     "lucide-react": "^0.575.0",

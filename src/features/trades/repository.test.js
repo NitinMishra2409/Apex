@@ -19,7 +19,7 @@ beforeEach(() => {
 
 describe('demo trading repository', () => {
     it('creates, reloads, edits and deletes a reviewed trade through the repository interface', async () => {
-        const form = { date: '2026-09-24T12:00:00Z', symbol: 'eth', direction: 'LONG', entry: '100', size: '1000' }
+        const form = { date: '2026-09-24T12:00:00Z', symbol: 'eth', direction: 'LONG', entry: '100', units: '10' }
         const repository = await import('./repository')
         const added = await repository.addTrade('demo-user', prepareTrade(form))
         expect(added).toMatchObject({ symbol: 'ETHUSDT', pnl: null, result: null })

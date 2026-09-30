@@ -1,17 +1,15 @@
-// The canonical risk/reward and P&L formulas.
+// The canonical risk/reward and P&L formulas. Everything that derives numbers
+// from a trade imports from here, including the demo seed.
 //
-// Previously duplicated verbatim in NewTrade.jsx and TradeLog.jsx, which meant a
-// fix in one place could silently disagree with the other. Everything that
-// derives numbers from a trade must import from here.
-//
-// P&L CONVENTION: `size` is notional in USDT and P&L is the percentage move
-// applied to that notional -- ((exit - entry) / entry) * size for a long. It is
-// NOT (exit - entry) * quantity. The seeded demo data uses these same functions,
-// so the numbers reconcile if you inspect a row.
+// P&L CONVENTION: price move × units × direction − fees, in the account currency.
+// Units are the total quantity (shares, coins, or lots × lot size), so the same
+// formula covers stocks, crypto, forex, futures and options premiums.
 
 /** Form input -> number, treating '' and null as "not provided". */
 export const num = (value) =>
     (value === '' || value === null || value === undefined) ? null : parseFloat(value)
+
+const round2 = value => +value.toFixed(2)
 
 /**
  * Planned reward-to-risk ratio from entry, stop and target.
@@ -28,18 +26,33 @@ export function calcRR(direction, entry, stopLoss, takeProfit) {
     const reward = direction === 'LONG' ? tp - en : en - tp
     if (risk <= 0) return null
 
-    return +(reward / risk).toFixed(2)
+    return round2(reward / risk)
 }
 
 /**
- * Realised P&L in USDT. Returns null until entry, exit and size are all present.
+ * Realised P&L: (exit − entry) × units for a long, reversed for a short, minus fees.
+ * Returns null until entry, exit and units are all present. Blank fees count as zero.
  */
-export function calcPnl(direction, entry, exitPrice, size) {
-    const en = num(entry), ex = num(exitPrice), sz = num(size)
-    if (!en || !ex || !sz) return null
+export function calcPnl(direction, entry, exitPrice, units, fees) {
+    const en = num(entry), ex = num(exitPrice), qty = num(units)
+    if (!en || !ex || !qty) return null
+    const move = direction === 'LONG' ? ex - en : en - ex
+    return round2(move * qty - (num(fees) ?? 0))
+}
 
-    const move = direction === 'LONG' ? (ex - en) / en : (en - ex) / en
-    return +(move * sz).toFixed(2)
+/** Amount at risk if the stop is hit: |entry − stop| × units. Null without a valid stop. */
+export function calcRisk(direction, entry, stopLoss, units) {
+    const en = num(entry), sl = num(stopLoss), qty = num(units)
+    if (!en || !sl || !qty) return null
+    const perUnit = direction === 'LONG' ? en - sl : sl - en
+    return perUnit > 0 ? round2(perUnit * qty) : null
+}
+
+/** Realised R: P&L measured in units of the amount risked. Null without P&L or risk. */
+export function realisedR(trade) {
+    if (trade.pnl === null || trade.pnl === undefined) return null
+    const risk = calcRisk(trade.direction, trade.entry, trade.sl, trade.units)
+    return risk ? round2(trade.pnl / risk) : null
 }
 
 /** WIN / LOSS / BE from P&L. Null P&L means the trade isn't closed yet. */

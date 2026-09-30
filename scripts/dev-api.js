@@ -1,6 +1,6 @@
 import { chatHandler } from '../api/chat.js'
+import { checklistMatchHandler } from '../api/checklist-match.js'
 import { speakHandler } from '../api/speak.js'
-import { listenHandler } from '../api/listen.js'
 import { transcribeHandler } from '../api/transcribe.js'
 import { allowLocalDemo } from '../server/assistant/runtime.js'
 
@@ -9,7 +9,7 @@ export function devApi(env) {
     return {
         name: 'apexlog-dev-api',
         configureServer(server) {
-            const routes = { chat: chatHandler, speak: speakHandler, listen: listenHandler, transcribe: transcribeHandler }
+            const routes = { chat: chatHandler, 'checklist-match': checklistMatchHandler, speak: speakHandler, transcribe: transcribeHandler }
             for (const [route, handler] of Object.entries(routes)) {
                 server.middlewares.use(`/api/${route}`, (req, res) => {
                     allowLocalDemo(req, env)

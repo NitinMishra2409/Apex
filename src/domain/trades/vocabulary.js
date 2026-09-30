@@ -30,6 +30,14 @@ export const DEFAULT_MISTAKES = [
     'Revenge Trade',
 ]
 
+/** Matches the CHECK constraint on trades.asset_class. */
+export const ASSET_CLASSES = ['stocks', 'crypto', 'forex', 'futures', 'options', 'other']
+export const ASSET_CLASS_LABELS = { stocks: 'Stocks', crypto: 'Crypto', forex: 'Forex', futures: 'Futures', options: 'Options', other: 'Other' }
+
+/** Account currencies. Display only: no conversion happens between them. */
+export const CURRENCIES = ['INR', 'USD', 'USDT', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'AED']
+export const DEFAULT_CURRENCY = 'INR'
+
 /** Matches the CHECK constraints on trades.direction and trades.result. */
 export const DIRECTIONS = ['LONG', 'SHORT']
 export const RESULTS = ['WIN', 'LOSS', 'BE']
