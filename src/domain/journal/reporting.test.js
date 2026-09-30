@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chartSeries, filterPeriod, weeklyRhythm } from './reporting'
+import { chartSeries, compactMoney, filterPeriod, money, weeklyRhythm } from './reporting'
 
 const trade = (day, pnl) => ({ date: new Date(2026, 8, day, 12).toISOString(), pnl })
 describe('dashboard periods', () => {
@@ -40,5 +40,26 @@ describe('weekly rhythm', () => {
     })
     it('can compare the preceding calendar week', () => {
         expect(weeklyRhythm([trade(13, 90), trade(14, 10)], true, new Date(2026, 8, 16)).at(-1).pnl).toBe(90)
+    })
+})
+describe('money in the account currency', () => {
+    it('signs P&L and places known symbols in front', () => {
+        expect(money(1234.5, 'USD')).toBe('+$1,234.50')
+        expect(money(-80, 'EUR')).toBe('−€80.00')
+        expect(money(0, 'USD')).toBe('$0.00')
+    })
+    it('uses Indian digit grouping for rupees', () => {
+        expect(money(123456.7, 'INR')).toBe('+₹1,23,456.70')
+    })
+    it('puts codes without a symbol after the amount', () => {
+        expect(money(-250.5, 'USDT')).toBe('−250.50 USDT')
+    })
+    it('can drop the plus sign for balances', () => {
+        expect(money(10000, 'INR', { signed: false, digits: 0 })).toBe('₹10,000')
+        expect(money(-5, 'INR', { signed: false })).toBe('−₹5.00')
+    })
+    it('abbreviates chart labels', () => {
+        expect(compactMoney(1250, 'INR')).toBe('+₹1.3k')
+        expect(compactMoney(-350, 'USDT')).toBe('−350 USDT')
     })
 })

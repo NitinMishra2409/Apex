@@ -23,7 +23,8 @@ it('sends demo chat and journal context without requiring a Supabase session', a
 it('uses the same demo identity for transcription and speech', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response('{"text":"Hello"}')).mockResolvedValueOnce(new Response(new Blob(['audio'])))
     vi.stubGlobal('fetch', fetcher)
-    expect(await transcribe(new Blob(['wav']))).toBe('Hello')
+    expect(await transcribe(new Blob(['webm'], { type: 'audio/webm;codecs=opus' }))).toBe('Hello')
+    expect(fetcher.mock.calls[0][1].headers['Content-Type']).toBe('audio/webm;codecs=opus')
     await speech('Hello from the demo')
     expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer demo-access-token')
     expect(fetcher.mock.calls[1][1].headers['X-Apex-Demo-Session']).toBe(fetcher.mock.calls[0][1].headers['X-Apex-Demo-Session'])

@@ -321,3 +321,19 @@ kbd { font-family: inherit; margin-left: auto; font-size: 10px; border: 1px soli
 @media (max-width: 768px) { .journal-header { flex-wrap: wrap; align-items: flex-start !important; gap: 16px; } .journal-summary { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); } .journal-summary > div { min-width: 0; } }
 @media (max-width: 420px) { .hero-copy h1 { font-size: 49px; } }
 @media (max-height: 800px) { .sidebar { padding-top: 24px; } .workspace-label { margin-top: 24px; margin-bottom: 20px; } .sidebar-bottom { padding-top: 24px; } .sidebar-note p { display: none; } .sidebar-note h3 { margin-bottom: 14px; } }
+
+/* Per-trade checklist (trade form) */
+.trade-checklist { margin-bottom: 1rem; }
+.trade-checklist-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.trade-plan-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: var(--yellow, #e7c36a); border: 1px solid color-mix(in srgb, var(--yellow, #e7c36a) 35%, transparent); background: color-mix(in srgb, var(--yellow, #e7c36a) 10%, transparent); }
+.trade-plan-badge.is-planned { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.trade-checklist-hint { font-size: 12px; color: var(--text-muted); }
+.trade-checklist-review { margin: 0 0 10px; font-size: 12.5px; line-height: 1.45; color: var(--yellow, #e7c36a); }
+.trade-checklist-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trade-check { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.trade-check:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.trade-check.is-on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); color: var(--text-primary); }
+.trade-check.needs-review { box-shadow: 0 0 0 2px color-mix(in srgb, var(--yellow, #e7c36a) 55%, transparent); }
+.trade-check-number { width: 18px; font-size: 11px; font-weight: 700; color: var(--accent); text-align: center; }
+.trade-check-box { width: 18px; height: 18px; flex-shrink: 0; border-radius: 5px; border: 2px solid var(--border); display: grid; place-items: center; color: #241806; }
+.trade-check.is-on .trade-check-box { background: var(--accent); border-color: var(--accent); }

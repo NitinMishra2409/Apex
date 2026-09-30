@@ -77,38 +77,3 @@ export async function getTradesAndStats(userId) {
     const trades = await getTrades(userId)
     return { trades, stats: computeTradeStats(trades) }
 }
-
-/** Convenience wrapper: fetch, then derive. */
-export async function getTradeStats(userId) {
-    return computeTradeStats(await getTrades(userId))
-}
-
-/**
- * Just today's P&L and trade count, for the navbar badge.
- *
- * The navbar previously downloaded every trade the user had ever made and
- * filtered client-side to show one number. This filters server-side and selects
- * only the two columns it needs, so the payload stays constant as the journal
- * grows instead of scaling with it.
- */
-export async function getTodaySummary(userId) {
-    const today = new Date().toISOString().split('T')[0]
-
-    if (DEMO) {
-        await demoDelay()
-        const todays = demoDb().trades.filter(t => t.date?.startsWith(today))
-        const pnl = todays.reduce((s, t) => s + (t.pnl ?? 0), 0)
-        return { count: todays.length, pnl: todays.length ? +pnl.toFixed(2) : null }
-    }
-
-    const { data, error } = await supabase
-        .from('trades')
-        .select('pnl')
-        .eq('user_id', userId)
-        .gte('date', today)
-    if (error) throw error
-
-    const rows = data ?? []
-    const pnl = rows.reduce((s, t) => s + (t.pnl ?? 0), 0)
-    return { count: rows.length, pnl: rows.length ? +pnl.toFixed(2) : null }
-}

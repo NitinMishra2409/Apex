@@ -1,4 +1,5 @@
 import { calcPnl, calcRR, getResult } from '../../domain/trades/math'
+import { dayKey } from '../../domain/journal/reporting'
 // Demo mode — lets the whole app be browsed with realistic fake data and no
 // Supabase project. Toggle with VITE_DEMO_MODE in .env.
 //
@@ -9,14 +10,27 @@ import { calcPnl, calcRR, getResult } from '../../domain/trades/math'
 import { SETUP_TYPES as SETUPS } from '../../domain/trades/vocabulary'
 import { CHECKLIST_DEFAULTS } from '../../domain/checklists/vocabulary'
 
-// Weighted so BTC dominates the way a real crypto journal usually does, while
-// still giving the per-asset filter and simulator something to work with.
+// The demo account is a crypto trader in USDT. Weighted so BTC dominates, with
+// each pair priced from its own realistic level.
 const DEMO_SYMBOLS = [
     'BTCUSDT', 'BTCUSDT', 'BTCUSDT', 'BTCUSDT', 'BTCUSDT',
     'ETHUSDT', 'ETHUSDT', 'ETHUSDT',
     'SOLUSDT', 'SOLUSDT',
     'XRPUSDT', 'DOGEUSDT',
 ]
+const BASE_PRICE = { BTCUSDT: 58500, ETHUSDT: 2650, SOLUSDT: 142, XRPUSDT: 0.58, DOGEUSDT: 0.118 }
+const DECIMALS = { BTCUSDT: 1, ETHUSDT: 2, SOLUSDT: 3, XRPUSDT: 4, DOGEUSDT: 5 }
+const FEE_RATE = 0.0005 // per side, on notional
+// Edge parameters tuned so demo-mode analytics land in believable ranges (see
+// src/platform/demo/store.test.js): planned trades get a real edge bump, unplanned
+// (and revenge) trades a real penalty, so the story holds up under Tilt, Monte Carlo
+// and drawdown, not just the headline win rate.
+const EDGE_LIFT = 0.01
+const PLANNED_BONUS = 0.08
+const UNPLANNED_PENALTY = -0.2
+const REVENGE_PENALTY = 0.12
+const EDGE_MIN = 0.12
+const EDGE_MAX = 0.92
 
 export const DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -41,7 +55,6 @@ const DEMO_LATENCY = Number(import.meta.env.VITE_DEMO_LATENCY_MS ?? 60)
 export const demoDelay = (ms = DEMO_LATENCY) =>
     ms > 0 ? new Promise(r => setTimeout(r, ms)) : Promise.resolve()
 
-const todayISO = () => new Date().toISOString().split('T')[0]
 
 // ── Seeded PRNG ─────────────────────────────────────────────────────────────
 // Deterministic so the demo account looks the same on every fresh load.
@@ -57,8 +70,8 @@ function mulberry32(seed) {
 
 // Each setup carries its own edge so the Setup Performance table has real spread.
 const EDGE = {
-    'Wyckoff Accumulation': 0.70, 'Wyckoff Distribution': 0.62, 'HVN Bounce': 0.58,
-    'Breakout': 0.53, 'Range Play': 0.50, 'Breakdown': 0.46, 'LVN Break': 0.42, 'Other': 0.36,
+    'Wyckoff Accumulation': 0.62, 'Wyckoff Distribution': 0.55, 'HVN Bounce': 0.5,
+    'Breakout': 0.45, 'Range Play': 0.42, 'Breakdown': 0.38, 'LVN Break': 0.34, 'Other': 0.3,
 }
 
 // Weighted so one mistake clearly dominates — the Dashboard highlights the top one.
@@ -92,14 +105,14 @@ const BE_NOTES = [
     'Structure invalidated before target, closed flat. Good discipline.',
 ]
 
-function seedTrades() {
+export function seedTrades() {
     const rnd = mulberry32(20240908)
     const pick = (arr) => arr[Math.floor(rnd() * arr.length)]
     const between = (a, b) => a + rnd() * (b - a)
 
     const trades = []
-    let price = 58500
-    const N = 74
+    let drift = 1
+    const N = 90
 
     for (let i = N - 1; i >= 0; i--) {
         const jitter = rnd() < 0.5 ? 0 : 1
@@ -109,25 +122,36 @@ function seedTrades() {
         const d = new Date()
         d.setDate(d.getDate() - daysAgo)
         d.setHours(7 + Math.floor(rnd() * 13), Math.floor(rnd() * 60), 0, 0)
+        // Sometimes the trader jumps straight back in after a loss: a revenge trade,
+        // entered 15-50 minutes later, usually unplanned and usually worse.
+        const previous = trades.at(-1)
+        const revenge = previous?.pnl < 0 && i > 1 && rnd() < 0.4
+        if (revenge) d.setTime(new Date(previous.date).getTime() + (15 + Math.floor(rnd() * 35)) * 60000)
 
-        // Random walk the price so the equity curve and heatmap look alive.
-        price = Math.min(118000, Math.max(51000, price * (1 + between(-0.021, 0.026))))
+        // One shared market drift so the pairs move together like a real crypto tape.
+        drift = Math.min(1.9, Math.max(0.85, drift * (1 + between(-0.021, 0.026))))
 
         const symbol = pick(DEMO_SYMBOLS)
+        const fix = value => +value.toFixed(DECIMALS[symbol])
         const direction = rnd() < 0.57 ? 'LONG' : 'SHORT'
         const setup_type = pick(SETUPS)
-        const entry = +price.toFixed(1)
-        const slDist = entry * between(0.004, 0.017)
-        const rrTarget = between(1.2, 3.4)
+        const entry = fix(BASE_PRICE[symbol] * drift * between(0.97, 1.03))
+        const slDist = entry * between(0.006, 0.02)
+        const rrTarget = between(1.0, 2.2)
 
-        const sl = +(direction === 'LONG' ? entry - slDist : entry + slDist).toFixed(1)
-        const tp = +(direction === 'LONG' ? entry + slDist * rrTarget : entry - slDist * rrTarget).toFixed(1)
-        const size = Math.round(between(1500, 12000) / 100) * 100
+        const sl = fix(direction === 'LONG' ? entry - slDist : entry + slDist)
+        const tp = fix(direction === 'LONG' ? entry + slDist * rrTarget : entry - slDist * rrTarget)
+        const notional = Math.round(between(800, 15000) / 100) * 100
+        const units = +(notional / entry).toPrecision(4)
 
-        // Resolve the outcome against that setup's edge.
+        // Planned trades (checklist used) carry more edge than unplanned ones.
+        const planned = rnd() < (revenge ? 0.25 : 0.72)
+        const edge = Math.min(EDGE_MAX, Math.max(EDGE_MIN, EDGE[setup_type] + (planned ? PLANNED_BONUS : UNPLANNED_PENALTY) + EDGE_LIFT - (revenge ? REVENGE_PENALTY : 0)))
+
+        // Resolve the outcome against that edge.
         const roll = rnd()
         let exit_price
-        if (roll < EDGE[setup_type] * 0.93) {
+        if (roll < edge * 0.93) {
             const captured = rnd() < 0.7 ? 1 : between(0.45, 0.95)   // full target or partial
             exit_price = direction === 'LONG' ? entry + slDist * rrTarget * captured : entry - slDist * rrTarget * captured
         } else if (roll < 0.93) {
@@ -136,18 +160,22 @@ function seedTrades() {
         } else {
             exit_price = entry                                        // scratched at breakeven
         }
-        exit_price = +exit_price.toFixed(1)
+        exit_price = fix(exit_price)
+        const fees = +((entry + exit_price) * units * FEE_RATE).toFixed(2)
 
         // Same formulas the New Trade form uses, so the numbers reconcile.
         const rr = calcRR(direction, entry, sl, tp)
-        const pnl = calcPnl(direction, entry, exit_price, size)
+        const pnl = calcPnl(direction, entry, exit_price, units, fees)
         const result = getResult(pnl)
 
-        // Mistakes cluster on losses, but leak into a few wins too.
+        const items = CHECKLIST_DEFAULTS.trade
+        const checklist = planned ? { items, checked: items.filter(() => rnd() < 0.85) } : null
+
+        // Mistakes cluster on losses and unplanned trades, but leak into a few wins too.
         let mistakes = null
-        const wantMistake = result === 'LOSS' ? rnd() < 0.74 : rnd() < 0.11
+        const wantMistake = revenge || (result === 'LOSS' ? rnd() < (planned ? 0.6 : 0.9) : rnd() < 0.11)
         if (wantMistake) {
-            const first = pick(MISTAKE_POOL)
+            const first = revenge ? 'Revenge Trade' : pick(MISTAKE_POOL)
             const second = rnd() < 0.28 ? pick(MISTAKE_POOL) : null
             mistakes = second && second !== first ? [first, second] : [first]
         }
@@ -159,44 +187,22 @@ function seedTrades() {
             id: 'demo-trade-' + String(i).padStart(3, '0'),
             user_id: DEMO_USER.id,
             date: d.toISOString(),
-            symbol,
-            direction, entry, exit_price, sl, tp, size,
-            rr, pnl, result, setup_type, mistakes, emotional_notes,
+            symbol, asset_class: 'crypto',
+            direction, entry, exit_price, sl, tp, units, fees,
+            rr, pnl, result, setup_type, mistakes, emotional_notes, checklist,
             created_at: d.toISOString(),
         })
     }
     return trades
 }
 
-function seedUsers() {
-    const rows = [
-        { email: 'demo@apexlog.app', days: 92, trades: null, admin: true }, // null = counted live
-        { email: 'priya.k@gmail.com', days: 61, trades: 41, admin: false },
-        { email: 'marcus.trades@proton.me', days: 47, trades: 18, admin: false },
-        { email: 'yuki.tanaka@outlook.com', days: 30, trades: 7, admin: false },
-        { email: 'sam.oduya@gmail.com', days: 12, trades: 63, admin: true },
-        { email: 'lena.vogt@web.de', days: 4, trades: 2, admin: false },
-        { email: 'arjun.m@icloud.com', days: 0, trades: 0, admin: false },
-    ]
-    return rows.map((r, i) => ({
-        id: i === 0 ? DEMO_USER.id : `demo-user-${String(i).padStart(4, '0')}`,
-        email: r.email,
-        created_at: new Date(Date.now() - r.days * 864e5).toISOString(),
-        is_admin: r.admin,
-        trade_count: r.trades,
-    }))
-}
-
 function blank() {
-    const t = todayISO()
     return {
         trades: seedTrades(),
-        users: seedUsers(),
+        profile: { currency: 'USDT', starting_balance: 10000 },
         checklists: { ...CHECKLIST_DEFAULTS },
         dailyProgress: {
-            [`${t}|premarket`]: ['Check economic calendar', 'Identify key S/R levels', 'Check BTC dominance'],
-            [`${t}|during`]: ['Follow entry rules', 'Position size correct'],
-            [`${t}|posttrade`]: ['Log the trade'],
+            [`${dayKey(new Date())}|premarket`]: CHECKLIST_DEFAULTS.premarket.slice(0, 3),
         },
         customMistakes: [
             { id: 'demo-cm-1', user_id: DEMO_USER.id, label: 'Overtraded session', created_at: new Date().toISOString() },
@@ -207,10 +213,12 @@ function blank() {
 
 // ── Store ───────────────────────────────────────────────────────────────────
 // Backed by localStorage so trades you add or delete survive a page refresh.
-// Bumped to v2 when the seed gained a symbol field. Changing this key discards
-// stale demo data whose shape predates the change, instead of leaving the user
-// with blank columns and no idea why.
-const DB_KEY = 'apexlog-demo-db-v2'
+// v3 added units, fees, asset class, per-trade checklists and the profile; v4 a more realistic seed;
+// v5 retuned that seed so the discipline story (planned vs unplanned, Tilt, Monte Carlo, drawdown,
+// SQN, fee drag) lands in believable ranges instead of the too-rosy v4 numbers. Changing this key
+// discards stale demo data whose shape predates the change, instead of leaving the user with blank
+// columns and no idea why.
+const DB_KEY = 'apexlog-demo-db-v5'
 let db = null
 
 export function demoDb() {

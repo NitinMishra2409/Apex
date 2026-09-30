@@ -1,11 +1,12 @@
-// Microphone capture + WAV encoding.
+// Microphone capture with optional pause detection.
 //
-// NVIDIA's ASR endpoint accepts WAV, OPUS or FLAC. MediaRecorder gives us a
-// WebM/Ogg container instead, so we decode what it produced and re-encode to
-// 16 kHz mono 16-bit WAV — the format Whisper expects, and ~32 KB/s on the wire.
+// The recorder's own compressed output (WebM/Ogg Opus, or MP4 on Safari) goes
+// straight to /api/transcribe; Groq Whisper decodes it. Opus is ~4 KB/s versus
+// ~32 KB/s for 16 kHz WAV, and skipping the decode/resample saves a step per turn.
 
-export const TARGET_SAMPLE_RATE = 16000
 export const MAX_RECORDING_MS = 120000 // 2 minutes is plenty to describe a trade
+// Pause length that ends a Coach turn. Shorter feels snappier; too short cuts people off mid-thought.
+export const SILENCE_MS = 800
 
 export function recordingSupported() {
     return typeof window !== 'undefined'
@@ -26,7 +27,7 @@ function pickMimeType() {
 }
 
 /**
- * Begin recording. Resolves to a handle with stop() -> Promise<Blob(wav)> and cancel().
+ * Begin recording. Resolves to a handle with stop() -> Promise<Blob> (recorder format) and cancel().
  * Throws if the user denies microphone permission.
  */
 export async function startRecording({ onSilence, onLevel, onNoSpeech } = {}) {
@@ -59,14 +60,14 @@ export async function startRecording({ onSilence, onLevel, onNoSpeech } = {}) {
             audioContext.createMediaStreamSource(stream).connect(analyser)
             const samples = new Float32Array(analyser.fftSize)
             const began = Date.now()
-            let voicedFrames = 0, lastVoice = 0
+            let voicedFrames = 0, lastVoice = 0, lastVoiceMark = 0
             monitor = setInterval(() => {
                 if (ended) return
                 analyser.getFloatTimeDomainData(samples)
                 const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length)
                 onLevel?.(Math.min(1, rms * 9))
-                if (rms > .018) { voicedFrames++; lastVoice = Date.now() }
-                if (voicedFrames >= 4 && Date.now() - lastVoice > 1250) { clearInterval(monitor); onSilence() }
+                if (rms > .018) { voicedFrames++; lastVoice = Date.now(); lastVoiceMark = performance.now() }
+                if (voicedFrames >= 4 && Date.now() - lastVoice > SILENCE_MS) { clearInterval(monitor); onSilence(lastVoiceMark) }
                 else if (voicedFrames < 4 && Date.now() - began > 30000) { clearInterval(monitor); onNoSpeech?.() }
             }, 100)
         } catch (err) { releaseMic(); try { recorder.stop() } catch { /* inactive */ } throw err }
@@ -81,15 +82,11 @@ export async function startRecording({ onSilence, onLevel, onNoSpeech } = {}) {
                     releaseMic()
                     reject(e.error ?? new Error('Recording failed.'))
                 }
-                recorder.onstop = async () => {
+                recorder.onstop = () => {
                     releaseMic()
-                    try {
-                        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
-                        if (!blob.size) throw new Error('No audio was captured.')
-                        resolve(await blobToWav(blob))
-                    } catch (err) {
-                        reject(err)
-                    }
+                    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
+                    if (blob.size) resolve(blob)
+                    else reject(new Error('No audio was captured.'))
                 }
                 if (recorder.state === 'inactive') recorder.onstop()
                 else recorder.stop()
@@ -102,72 +99,4 @@ export async function startRecording({ onSilence, onLevel, onNoSpeech } = {}) {
             releaseMic()
         },
     }
-}
-
-/** Decode any browser-recorded blob and re-encode it as 16 kHz mono WAV. */
-export async function blobToWav(blob) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (!AudioCtx) throw new Error('Web Audio is not available in this browser.')
-
-    const bytes = await blob.arrayBuffer()
-    const ctx = new AudioCtx()
-    let decoded
-    try {
-        decoded = await ctx.decodeAudioData(bytes)
-    } catch {
-        throw new Error('Could not decode the recorded audio.')
-    } finally {
-        ctx.close()
-    }
-
-    const mono = await resampleToMono(decoded, TARGET_SAMPLE_RATE)
-    return encodeWav(mono, TARGET_SAMPLE_RATE)
-}
-
-/** Downmix to one channel and resample, using the browser's own resampler. */
-async function resampleToMono(buffer, sampleRate) {
-    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    const frames = Math.max(1, Math.ceil(buffer.duration * sampleRate))
-
-    // Rendering into a 1-channel destination downmixes multi-channel input.
-    const offline = new OfflineCtx(1, frames, sampleRate)
-    const source = offline.createBufferSource()
-    source.buffer = buffer
-    source.connect(offline.destination)
-    source.start()
-
-    const rendered = await offline.startRendering()
-    return rendered.getChannelData(0)
-}
-
-/** Float32 samples in [-1,1] -> 16-bit PCM WAV blob. */
-export function encodeWav(samples, sampleRate) {
-    const dataBytes = samples.length * 2
-    const view = new DataView(new ArrayBuffer(44 + dataBytes))
-
-    const writeAscii = (offset, text) => {
-        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i))
-    }
-
-    writeAscii(0, 'RIFF')
-    view.setUint32(4, 36 + dataBytes, true)
-    writeAscii(8, 'WAVE')
-    writeAscii(12, 'fmt ')
-    view.setUint32(16, 16, true)          // PCM header size
-    view.setUint16(20, 1, true)           // format = PCM
-    view.setUint16(22, 1, true)           // mono
-    view.setUint32(24, sampleRate, true)
-    view.setUint32(28, sampleRate * 2, true) // byte rate
-    view.setUint16(32, 2, true)           // block align
-    view.setUint16(34, 16, true)          // bits per sample
-    writeAscii(36, 'data')
-    view.setUint32(40, dataBytes, true)
-
-    let offset = 44
-    for (let i = 0; i < samples.length; i++, offset += 2) {
-        const s = Math.max(-1, Math.min(1, samples[i]))
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
-    }
-
-    return new Blob([view.buffer], { type: 'audio/wav' })
 }

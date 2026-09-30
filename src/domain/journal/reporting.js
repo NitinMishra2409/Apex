@@ -16,8 +16,23 @@ export function filterPeriod(trades, period, now = new Date()) {
     if (!bounds) return trades
     return trades.filter(t => new Date(t.date) >= bounds.start && new Date(t.date) <= bounds.end)
 }
-export const money = (value, digits = 2) => `${value < 0 ? '−' : '+'}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`
-export const compactMoney = value => `${value < 0 ? '−' : value > 0 ? '+' : ''}${Math.abs(value) >= 1000 ? `${(Math.abs(value) / 1000).toFixed(1)}k` : Math.abs(value).toFixed(0)}`
+// Account currencies are display-only. Known symbols go in front; others (USDT) follow the amount.
+const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£', JPY: '¥', AUD: 'A$', CAD: 'C$', SGD: 'S$' }
+const wrapCurrency = (amount, currency) => CURRENCY_SYMBOLS[currency] ? `${CURRENCY_SYMBOLS[currency]}${amount}` : `${amount} ${currency}`
+const sign = (value, signed) => value < 0 ? '−' : signed && value > 0 ? '+' : ''
+/** "+₹1,23,456.00", "−250.50 USDT". Rupees use Indian digit grouping. */
+export function money(value, currency = 'USD', { signed = true, digits = 2 } = {}) {
+    const amount = Math.abs(value).toLocaleString(currency === 'INR' ? 'en-IN' : 'en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+    return `${sign(value, signed)}${wrapCurrency(amount, currency)}`
+}
+/** Chart-axis form: "+₹1.2k", "−350 USDT". */
+export function compactMoney(value, currency = 'USD') {
+    const abs = Math.abs(value)
+    return `${sign(value, true)}${wrapCurrency(abs >= 1000 ? `${(abs / 1000).toFixed(1)}k` : abs.toFixed(0), currency)}`
+}
+export const currencySymbol = currency => CURRENCY_SYMBOLS[currency] ?? currency
+/** "62% (45–78%)": a win rate with its 95% range so small samples don't overclaim. */
+export const rateWithRange = interval => interval ? `${interval.rate}% (${interval.low}–${interval.high}%)` : '—'
 export const shortDate = value => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 export function chartSeries(trades, mode = 'cumulative') {

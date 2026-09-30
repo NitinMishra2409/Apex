@@ -1,0 +1,20 @@
+.auth-page { min-height: calc(100dvh - 88px); display: grid; place-items: center; padding: max(28px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); background: radial-gradient(ellipse at 78% 0%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 54%),var(--bg-primary); }
+.auth-card { width: 100%; max-width: 470px; padding: 36px; background: var(--surface-panel); border: 1px solid var(--surface-border); border-top: 3px solid var(--accent); border-radius: 12px; box-shadow: 0 20px 45px #0002; }
+.auth-rail { position: absolute; left: max(32px,calc((100vw - 1360px) / 2)); top: 118px; bottom: 32px; width: 205px; padding: 20px 20px 20px 0; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--surface-border); color: var(--text-secondary); }
+.auth-rail .brand { font-size: 20px; }
+.auth-rail p { font-size: 13px; line-height: 1.65; }
+.auth-header { text-align: center; margin-bottom: 26px; }
+.auth-header h1 { font-size: 29px; font-weight: 640; letter-spacing: -.04em; line-height: 1.15; margin-bottom: 9px; text-wrap: balance; }
+.auth-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 7px; }
+.auth-page input { min-height: 46px; border-radius: 8px; }
+.auth-page button { min-height: 44px; }
+.auth-page :is(a,button,input):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.auth-page a { min-height: 44px; display: inline-flex; align-items: center; }
+.auth-page a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.auth-page form + div { border-top: 1px solid var(--surface-border); padding-top: 15px; }
+.auth-page button[disabled] { cursor: wait; }
+.auth-checking { align-items: center; gap: 14px; color: var(--text-secondary); font-size: 14px; }
+@media (max-width: 1000px) { .auth-rail { display: none; } }
+@media (max-width: 480px) { .auth-card { padding: 24px 20px; } .auth-page { align-items: start; padding-top: 30px; } .auth-header { margin-bottom: 22px; } }
+@media (prefers-reduced-motion: reduce) { .auth-page * { animation: none !important; transition-duration: 0ms !important; } }
+html[data-motion='reduced'] .auth-page * { animation: none !important; transition-duration: 0ms !important; }

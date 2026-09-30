@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTradeSpeech, wordsToNumbers } from './voiceParse'
 
-// The two REAL transcripts below came back verbatim from NVIDIA Whisper during
+// The two REAL transcripts below came back verbatim from Whisper during
 // development. Keep them: synthetic test strings written without punctuation all
 // passed while real ASR output failed, because real output ends sentences with
 // periods and the number regex rejected "3100." -- a bug only real data exposed.
@@ -32,7 +32,7 @@ describe('parseTradeSpeech - real Whisper output', () => {
             'Long Bitcoin at 68,400, Stop 67,200, Target 71,500, Size 5000, Breakout Setup, I chased the entry.')
         expect(fields).toMatchObject({
             direction: 'LONG', entry: 68400, sl: 67200, tp: 71500,
-            size: 5000, setup_type: 'Breakout', mistakes: ['Chased Entry'],
+            units: 5000, setup_type: 'Breakout', mistakes: ['Chased Entry'],
         })
     })
 
@@ -42,7 +42,7 @@ describe('parseTradeSpeech - real Whisper output', () => {
             'Position size was$2500. It was a range play, and honestly I moved my stop.')
         expect(fields).toMatchObject({
             direction: 'SHORT', entry: 3250, sl: 3310, tp: 3100,
-            size: 2500, setup_type: 'Range Play', mistakes: ['Moved SL'],
+            units: 2500, setup_type: 'Range Play', mistakes: ['Moved SL'],
         })
     })
 })
@@ -50,13 +50,13 @@ describe('parseTradeSpeech - real Whisper output', () => {
 describe('parseTradeSpeech - number formats', () => {
     const cases = [
         ['k shorthand', 'went long at 68k stop 67k target 71k size 4500',
-            { direction: 'LONG', entry: 68000, sl: 67000, tp: 71000, size: 4500 }],
+            { direction: 'LONG', entry: 68000, sl: 67000, tp: 71000, units: 4500 }],
         ['spelled out', 'short at sixty eight thousand five hundred, stop loss sixty nine thousand, take profit sixty six thousand',
             { direction: 'SHORT', entry: 68500, sl: 69000, tp: 66000 }],
         ['sub-dollar decimals', 'long entry 0.5234 stop 0.5100 target 0.5600 size 1200 range play',
-            { direction: 'LONG', entry: 0.5234, sl: 0.51, tp: 0.56, size: 1200, setup_type: 'Range Play' }],
+            { direction: 'LONG', entry: 0.5234, sl: 0.51, tp: 0.56, units: 1200, setup_type: 'Range Play' }],
         ['trailing periods', 'Long at 68400. Stop 67200. Target 71500. Size 5000.',
-            { direction: 'LONG', entry: 68400, sl: 67200, tp: 71500, size: 5000 }],
+            { direction: 'LONG', entry: 68400, sl: 67200, tp: 71500, units: 5000 }],
         ['other sentence punctuation', 'Long at 500! Stop 480? Target 560.',
             { direction: 'LONG', entry: 500, sl: 480, tp: 560 }],
         ['decimals survive punctuation stripping', 'long at 0.5234. stop 0.51. target 0.56.',
@@ -72,14 +72,14 @@ describe('parseTradeSpeech - field disambiguation', () => {
         // "stop at 3300" must fill sl, not entry.
         const { fields } = parseTradeSpeech(
             'shorted ethereum at 3200 with a stop at 3300 and a target at 3000, position size 2000 usdt')
-        expect(fields).toMatchObject({ entry: 3200, sl: 3300, tp: 3000, size: 2000 })
+        expect(fields).toMatchObject({ entry: 3200, sl: 3300, tp: 3000, units: 2000 })
     })
 
     it('treats a bare number after the direction as the entry', () => {
         const { fields } = parseTradeSpeech('lvn break short 88000 stop 89000 target 85000 size 7000 no real setup')
         expect(fields).toMatchObject({
             direction: 'SHORT', entry: 88000, sl: 89000, tp: 85000,
-            size: 7000, setup_type: 'LVN Break', mistakes: ['No Setup'],
+            units: 7000, setup_type: 'LVN Break', mistakes: ['No Setup'],
         })
     })
 
@@ -88,7 +88,7 @@ describe('parseTradeSpeech - field disambiguation', () => {
             'bought at 71000, exited at 72500, stop was 70000, size 3000, wyckoff accumulation setup')
         expect(fields).toMatchObject({
             direction: 'LONG', entry: 71000, exit_price: 72500, sl: 70000,
-            size: 3000, setup_type: 'Wyckoff Accumulation',
+            units: 3000, setup_type: 'Wyckoff Accumulation',
         })
     })
 
@@ -116,7 +116,7 @@ describe('parseTradeSpeech - refuses to invent data', () => {
     it('returns nothing for speech with no trade content', () => {
         const { fields, matched } = parseTradeSpeech('I just felt bad about the session.')
         expect(matched).toHaveLength(0)
-        for (const key of ['entry', 'sl', 'tp', 'size', 'exit_price']) {
+        for (const key of ['entry', 'sl', 'tp', 'units', 'exit_price']) {
             expect(fields[key]).toBeUndefined()
         }
     })
@@ -126,7 +126,7 @@ describe('parseTradeSpeech - refuses to invent data', () => {
         expect(fields).toMatchObject({ direction: 'LONG', entry: 68000 })
         expect(fields.sl).toBeUndefined()
         expect(fields.tp).toBeUndefined()
-        expect(fields.size).toBeUndefined()
+        expect(fields.units).toBeUndefined()
     })
 
     it('survives empty and nullish input', () => {
@@ -136,7 +136,7 @@ describe('parseTradeSpeech - refuses to invent data', () => {
     })
 
     it('reports which required fields are still missing', () => {
-        expect(parseTradeSpeech('long at 68000').missing).toEqual(['sl', 'tp', 'size'])
+        expect(parseTradeSpeech('long at 68000').missing).toEqual(['sl', 'tp', 'units'])
     })
 })
 
@@ -182,7 +182,26 @@ describe('parseTradeSpeech - asset detection', () => {
             'BTC USDT long at 68400, stop 67200, target 71500, size 5000, breakout, I chased the entry')
         expect(fields).toMatchObject({
             symbol: 'BTCUSDT', direction: 'LONG', entry: 68400, sl: 67200,
-            tp: 71500, size: 5000, setup_type: 'Breakout', mistakes: ['Chased Entry'],
+            tp: 71500, units: 5000, setup_type: 'Breakout', mistakes: ['Chased Entry'],
         })
+    })
+})
+
+describe('units, lots and fees for any asset class', () => {
+    it('reads a quantity that trails its number', () => {
+        const { fields } = parseTradeSpeech('bought 50 shares of reliance at 2900 stop 2860 target 2980')
+        expect(fields).toMatchObject({ direction: 'LONG', units: 50, entry: 2900, sl: 2860, tp: 2980, symbol: 'RELIANCE' })
+    })
+    it('multiplies lots by the lot size', () => {
+        const { fields } = parseTradeSpeech('short 2 lots of 75 nifty at 22400 stop 22460')
+        expect(fields).toMatchObject({ direction: 'SHORT', units: 150, entry: 22400, sl: 22460, symbol: 'NIFTY' })
+    })
+    it('reads fees before or after the number', () => {
+        expect(parseTradeSpeech('long at 100 exit 110 quantity 10 fees 4').fields).toMatchObject({ units: 10, fees: 4, exit_price: 110 })
+        expect(parseTradeSpeech('long at 100 exit 110 quantity 10, paid 12 in fees').fields.fees).toBe(12)
+    })
+    it('hears forex pairs said as words', () => {
+        expect(parseTradeSpeech('short euro dollar at 1.0850 stop 1.0880').fields.symbol).toBe('EURUSD')
+        expect(parseTradeSpeech('long gbp usd at 1.27').fields.symbol).toBe('GBPUSD')
     })
 })

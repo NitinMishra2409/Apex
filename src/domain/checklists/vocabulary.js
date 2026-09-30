@@ -1,30 +1,33 @@
-/** Checklist types — matches the CHECK constraint on checklists.type. */
-export const CHECKLIST_TYPES = ['premarket', 'during', 'posttrade']
+/** Checklist types: matches the CHECK constraint on checklists.type. */
+export const CHECKLIST_TYPES = ['premarket', 'trade', 'postmarket']
+/** The once-a-day checklists; their progress resets at the trader's local midnight. */
+export const DAILY_CHECKLIST_TYPES = ['premarket', 'postmarket']
 
 export const CHECKLIST_LABELS = {
-    premarket: 'Pre-Market Checklist',
-    during: 'During Trade Checklist',
-    posttrade: 'Post-Trade Checklist',
+    premarket: 'Pre-market checklist',
+    trade: 'Per-trade checklist',
+    postmarket: 'Post-market checklist',
 }
 
 export const CHECKLIST_DEFAULTS = {
     premarket: [
-        'Check economic calendar',
-        'Identify key S/R levels',
-        'Check BTC dominance',
+        'Check the economic calendar',
+        'Mark key levels on my watchlist',
+        'Set my max daily loss',
         "Review yesterday's trades",
-        'Set daily loss limit',
+        'Decide how many trades I will take',
     ],
-    during: [
-        'Follow entry rules',
-        'Position size correct',
-        'SL placed correctly',
+    trade: [
+        'Setup matches my playbook',
+        'Stop loss placed',
+        'Position size within my risk limit',
+        'Reward is at least 2R',
         'Not revenge trading',
     ],
-    posttrade: [
-        'Log the trade',
+    postmarket: [
+        'Log every trade',
         'Review what went well',
-        'Identify mistakes',
+        'Tag my mistakes',
         'Update journal notes',
     ],
 }

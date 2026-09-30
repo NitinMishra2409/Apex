@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
 import { EventEmitter } from 'node:events'
-import { openHistory, sealHistory, authenticate, readJson, allowLocalDemo } from '../../server/assistant/runtime.js'
+import { openHistory, sealHistory, authenticate, readJson, allowLocalDemo, forgetVerifiedSessions, historySecret } from '../../server/assistant/runtime.js'
 import { summarizeJournal, loadJournal, loadDemoJournal } from '../../server/assistant/journal.js'
-import { streamCompletion, chatHandler } from '../../api/chat.js'
+import { streamCompletion, chatHandler, modelChain, VOICE_INSTRUCTION } from '../../api/chat.js'
 import { speakHandler } from '../../api/speak.js'
-import { listenHandler } from '../../api/listen.js'
-afterEach(() => vi.unstubAllGlobals())
+import { transcribeHandler } from '../../api/transcribe.js'
+afterEach(() => { vi.unstubAllGlobals(); forgetVerifiedSessions() })
 const demoRequest = (overrides = {}) => ({ socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'localhost:5173', origin: 'http://localhost:5173', authorization: 'Bearer demo-access-token', 'x-apex-demo-session': 'test-demo-session-0001' }, ...overrides })
 describe('local demo access', () => {
     it('allows a local Vite demo session without contacting Supabase', async () => {
@@ -55,11 +55,31 @@ describe('conversation isolation', () => {
 })
 describe('journal grounding', () => {
     const trades = [{ date: '2026-09-14', symbol: 'BTCUSDT', pnl: 100, setup_type: 'Breakout', mistakes: ['FOMO'], emotional_notes: 'Private note' }, { date: '2026-09-13', symbol: 'BTCUSDT', pnl: -25 }, { date: '2026-09-12', pnl: 0 }, { date: '2026-09-11', pnl: null }]
-    it('separates open and breakeven trades and computes authoritative aggregates', () => { expect(summarizeJournal(trades)).toMatchObject({ tradeCount: 4, completedCount: 3, openCount: 1, netPnl: 75, wins: 1, losses: 1, breakeven: 1, winRate: 33.33, profitFactor: 4 }) })
-    it('excludes notes by default and bounds included detail', () => { expect(JSON.stringify(summarizeJournal(trades))).not.toContain('Private note'); expect(summarizeJournal(trades, { includeNotes: true }).recentTrades[0].notes).toBe('Private note'); expect(summarizeJournal(Array(60).fill(trades[0])).recentTrades).toHaveLength(40) })
-    it('treats malicious object-key names as inert journal labels', () => { expect(summarizeJournal([{ pnl: 1, setup_type: '__proto__', mistakes: ['constructor'] }]).bySetup.__proto__.pnl).toBe(1); expect({}.pnl).toBeUndefined() })
+    it('separates open and breakeven trades and computes authoritative aggregates', () => { expect(summarizeJournal(trades)).toMatchObject({ tradeCount: 4, completedCount: 3, openCount: 1, netPnl: 75, wins: 1, losses: 1, breakeven: 1, winRate: 33.3, profitFactor: 4 }) })
+    it('excludes notes by default and bounds included detail', () => {
+        expect(JSON.stringify(summarizeJournal(trades))).not.toContain('Private note')
+        const withNotes = summarizeJournal(trades, { includeNotes: true })
+        expect(withNotes.recentTrades[0][withNotes.recentColumns.indexOf('notes')]).toBe('Private note')
+        expect(summarizeJournal(Array(60).fill(trades[0])).recentTrades).toHaveLength(12)
+    })
+    it('treats malicious object-key names as inert journal labels', () => { expect(summarizeJournal([{ pnl: 1, setup_type: '__proto__', mistakes: ['constructor'] }]).bySetup.__proto__[2]).toBe(1); expect({}.pnl).toBeUndefined() })
+    it('stays compact enough for the free-tier token budget', () => {
+        const big = Array.from({ length: 74 }, (_, i) => ({ date: new Date(Date.UTC(2026, 8, 27) - i * 7e7).toISOString(), symbol: ['BTCUSDT', 'ETHUSDT', 'NIFTY'][i % 3], direction: 'LONG', entry: 100, exit_price: 101, sl: 99, units: 5, fees: 0.2, pnl: i % 3 ? 4.8 : -5.2, setup_type: 'Breakout', mistakes: i % 4 ? [] : ['FOMO Entry'], checklist: i % 3 ? { items: ['a', 'b'], checked: ['a'] } : null }))
+        // Roughly 4 characters per token: ~1.3K tokens at most.
+        expect(JSON.stringify(summarizeJournal(big)).length).toBeLessThan(5200)
+    })
+    it('reports planning discipline, drawdown, expectancy and tilt for the Coach', () => {
+        const rows = [
+            { date: '2026-09-14T10:00:00Z', pnl: 200, direction: 'LONG', entry: 100, sl: 90, units: 10, fees: 5, checklist: { items: ['a'], checked: ['a'] } },
+            { date: '2026-09-14T09:00:00Z', pnl: -100, direction: 'LONG', entry: 100, sl: 90, units: 10, fees: 5, checklist: null },
+        ]
+        expect(summarizeJournal(rows, { currency: 'INR' })).toMatchObject({
+            currency: 'INR', fees: 10, planned: { trades: 1, net: 200 }, unplanned: { trades: 1, net: -100 },
+            drawdown: { max: 100 }, expectancyR: { tradesWithStop: 2, averageR: 0.5 }, tilt: { enteredWithin60mOfLoss: { trades: 1, net: 200 } },
+        })
+    })
     it('queries only the verified owner using their RLS credentials', async () => {
-        const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(trades))); vi.stubGlobal('fetch', fetcher)
+        const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify(trades))); vi.stubGlobal('fetch', fetcher)
         await loadJournal({ userId: 'verified-user', url: 'https://db.example', headers: { Authorization: 'Bearer user-token', apikey: 'anon-key' } }, { includeNotes: false, from: '2026-09-01' })
         const [url, options] = fetcher.mock.calls[0]
         expect(new URL(url).searchParams.get('user_id')).toBe('eq.verified-user'); expect(url).not.toContain('emotional_notes'); expect(options.headers.Authorization).toBe('Bearer user-token')
@@ -82,12 +102,32 @@ describe('provider streaming and audio', () => {
         const reply = await streamCompletion([{ role: 'assistant', content: 'Earlier reply', reasoning_content: 'Old provider reasoning' }], { GROQ_API_KEY: 'test' }, undefined, onToken)
         expect(onToken.mock.calls).toEqual([['Hello.']]); expect(reply).not.toHaveProperty('reasoning_content')
         const payload = JSON.parse(fetch.mock.calls[0][1].body)
-        expect(payload.model).toBe('llama-3.3-70b-versatile')
+        expect(payload.model).toBe('openai/gpt-oss-120b')
         expect(payload).not.toHaveProperty('chat_template_kwargs')
         expect(payload.messages).toEqual([{ role: 'assistant', content: 'Earlier reply' }])
         expect(fetch.mock.calls[0][0]).toBe('https://api.groq.com/openai/v1/chat/completions')
         expect(fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer test')
-        expect(payload).not.toHaveProperty('reasoning_effort')
+        // Low effort cut time-to-first-word from ~1.6 s to ~0.7 s in measurements.
+        expect(payload.reasoning_effort).toBe('low')
+        expect(payload.max_completion_tokens).toBe(1024)
+    })
+    it('moves to the next model bucket when one is rate limited, before any text streams', async () => {
+        const done = 'data: {"choices":[{"delta":{"content":"Hi."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+        const fetcher = vi.fn().mockResolvedValueOnce(new Response('busy', { status: 429 })).mockResolvedValueOnce(new Response(done))
+        vi.stubGlobal('fetch', fetcher)
+        await streamCompletion([], { GROQ_API_KEY: 'k' }, undefined, () => {})
+        expect(fetcher.mock.calls.map(c => JSON.parse(c[1].body).model)).toEqual(['openai/gpt-oss-120b', 'openai/gpt-oss-20b'])
+    })
+    it('uses the fast model and a short budget for voice turns', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"Hi."},"finish_reason":"stop"}]}\n\n')))
+        await streamCompletion([], { GROQ_API_KEY: 'k' }, undefined, () => {}, { voice: true })
+        const payload = JSON.parse(fetch.mock.calls[0][1].body)
+        expect(payload).toMatchObject({ model: 'openai/gpt-oss-20b', max_completion_tokens: 400 })
+        expect(modelChain({ GROQ_VOICE_MODEL: 'qwen/qwen3.8-27b', GROQ_FALLBACK_MODELS: 'openai/gpt-oss-20b' }, true)).toEqual(['qwen/qwen3.8-27b', 'openai/gpt-oss-20b'])
+    })
+    it('keeps conversation history on its own secret when one is configured', () => {
+        expect(historySecret({ GROQ_API_KEY: 'groq', ASSISTANT_HISTORY_SECRET: 'history' })).toBe('history')
+        expect(historySecret({ GROQ_API_KEY: 'groq' })).toBe('groq')
     })
     it('rejects a disconnected stream even after partial text', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\n')))
@@ -116,23 +156,40 @@ describe('API access control', () => {
         expect(JSON.parse(fetcher.mock.calls[0][1].body).messages[0].content).toContain('local demo journal')
     })
     it('completes a grounded chat without emitting reasoning or provider credentials', async () => {
-        const fetcher = vi.fn().mockResolvedValueOnce(new Response('{"id":"alice"}')).mockResolvedValueOnce(new Response('[{"date":"2026-09-14","pnl":12,"symbol":"BTCUSDT"}]')).mockResolvedValueOnce(new Response('data: {"choices":[{"delta":{"reasoning_content":"hidden provider context"}}]}\n\ndata: {"choices":[{"delta":{"content":"Your recorded P&L is 12 USDT."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'))
+        const fetcher = vi.fn(async url => {
+            if (url.includes('/auth/v1/user')) return new Response('{"id":"alice"}')
+            if (url.includes('/rest/v1/trades')) return new Response('[{"date":"2026-09-14","pnl":12,"symbol":"BTCUSDT"}]')
+            if (url.includes('/rest/v1/user_profiles')) return new Response('[{"currency":"USDT","starting_balance":1000}]')
+            return new Response('data: {"choices":[{"delta":{"reasoning_content":"hidden provider context"}}]}\n\ndata: {"choices":[{"delta":{"content":"Your recorded P&L is 12 USDT."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+        })
         vi.stubGlobal('fetch', fetcher)
         const res = response()
         await chatHandler(request({ message: 'Review my performance', userId: 'someone-else' }), res, env)
         expect(res.statusCode).toBe(200); expect(res.output).toContain('Your recorded P&L'); expect(res.output).not.toContain('hidden provider context'); expect(res.output).not.toContain('private-key')
         const frames = res.output.trim().split('\n\n').map(line => JSON.parse(line.slice(6)))
         expect(frames[0]).toMatchObject({ type: 'context', tradeCount: 1 })
+        const timingHeader = res.setHeader.mock.calls.find(([name]) => name === 'Server-Timing')?.[1]
+        expect(timingHeader).toMatch(/auth;dur=\d+\.\d, journal;dur=\d+\.\d/)
+        expect(frames.at(-1).timing).toMatchObject({ auth: expect.any(Number), journal: expect.any(Number), provider: expect.any(Number), firstToken: expect.any(Number) })
+        expect(JSON.stringify(frames.at(-1).timing)).not.toMatch(/alice|private-key|Your recorded/)
         const retained = openHistory(frames.at(-1).history, 'alice', 'private-key')
         expect(retained.at(-1)).toEqual({ role: 'assistant', content: 'Your recorded P&L is 12 USDT.' })
         expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('user_id')).toBe('eq.alice')
+        const system = JSON.parse(fetcher.mock.calls.at(-1)[1].body).messages[0].content
+        expect(system).toContain('"currency":"USDT"'); expect(system).not.toContain(VOICE_INSTRUCTION)
+    })
+    it('verifies a session once per minute per instance, not on every request', async () => {
+        const fetcher = vi.fn().mockImplementation(async () => new Response('{"id":"alice"}')); vi.stubGlobal('fetch', fetcher)
+        const req = { headers: { authorization: 'Bearer same-token' } }
+        await authenticate(req, env); await authenticate(req, env)
+        expect(fetcher).toHaveBeenCalledTimes(1)
     })
     it.each([null, { message: '' }, { message: 'x'.repeat(4001) }, { message: 'hello', from: 'invalid' }])('rejects invalid chat input before reading the journal', async body => {
         const fetcher = vi.fn().mockResolvedValue(new Response('{"id":"alice"}')); vi.stubGlobal('fetch', fetcher)
         const res = response(); await chatHandler(request(body), res, env)
         expect(res.statusCode).toBe(400); expect(fetcher).toHaveBeenCalledTimes(1)
     })
-    it.each([chatHandler, speakHandler, listenHandler])('rejects unauthenticated requests before reading content or calling providers', async handler => {
+    it.each([chatHandler, speakHandler, transcribeHandler])('rejects unauthenticated requests before reading content or calling providers', async handler => {
         const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
         const req = Readable.from([Buffer.from('{}')]); req.method = 'POST'; req.headers = {}
         const res = new EventEmitter(); res.setHeader = vi.fn(); res.end = vi.fn()

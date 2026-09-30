@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodeWav, startRecording } from './recording'
+import { startRecording } from './recording'
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 function microphone() {
     const track = { stop: vi.fn() }, close = vi.fn().mockResolvedValue(), level = { value: .05 }
@@ -27,8 +27,8 @@ describe('voice capture lifecycle', () => {
         const handle = await startRecording({ onSilence })
         await vi.advanceTimersByTimeAsync(500); expect(onSilence).not.toHaveBeenCalled()
         level.value = 0
-        await vi.advanceTimersByTimeAsync(1000); expect(onSilence).not.toHaveBeenCalled()
-        await vi.advanceTimersByTimeAsync(400); expect(onSilence).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(700); expect(onSilence).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(300); expect(onSilence).toHaveBeenCalledTimes(1)
         handle.cancel(); expect(track.stop).toHaveBeenCalled(); expect(close).toHaveBeenCalled()
     })
     it('stops the idle microphone workflow after 30 seconds without speech', async () => {
@@ -43,9 +43,16 @@ describe('voice capture lifecycle', () => {
         vi.stubGlobal('MediaRecorder', BrokenRecorder)
         await expect(startRecording()).rejects.toThrow('Unsupported'); expect(track.stop).toHaveBeenCalledTimes(1)
     })
-    it('encodes clipped PCM samples at the transcription sample rate', async () => {
-        const wav = encodeWav(new Float32Array([-2, 0, 2]), 16000)
-        const data = new DataView(await wav.arrayBuffer())
-        expect(data.getUint32(24, true)).toBe(16000); expect(data.getInt16(44, true)).toBe(-32768); expect(data.getInt16(48, true)).toBe(32767)
+    it('returns the recorder output as-is, typed for upload', async () => {
+        const { track } = microphone()
+        class OpusRecorder {
+            static isTypeSupported(type) { return type === 'audio/webm;codecs=opus' }
+            constructor(stream, options) { this.mimeType = options.mimeType }
+            start() { this.state = 'recording' }
+            stop() { this.state = 'inactive'; this.ondataavailable({ data: new Blob(['opus']) }); this.onstop() }
+        }
+        vi.stubGlobal('MediaRecorder', OpusRecorder)
+        const blob = await (await startRecording()).stop()
+        expect(blob.type).toBe('audio/webm;codecs=opus'); expect(await blob.text()).toBe('opus'); expect(track.stop).toHaveBeenCalled()
     })
 })

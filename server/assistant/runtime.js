@@ -45,6 +45,14 @@ export async function readJson(req, limit = 280000) {
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) }
     catch { throw new AssistantError(400, 'BAD_REQUEST', 'Expected a JSON request.') }
 }
+// A warm function instance remembers a verified access token for up to a minute, so a
+// voice turn (transcribe, chat, several speak requests) checks Supabase once, not every time.
+const SESSION_TTL_MS = 60000
+const verifiedSessions = new Map()
+const tokenKey = token => createHash('sha256').update(token).digest('base64url')
+/** Test hook: drop cached session verifications. */
+export function forgetVerifiedSessions() { verifiedSessions.clear() }
+
 export async function authenticate(req, env, signal) {
     const token = req.headers.authorization?.match(/^Bearer (.+)$/i)?.[1]
     if (token === 'demo-access-token' && localDemoRequests.has(req)) {
@@ -57,12 +65,18 @@ export async function authenticate(req, env, signal) {
     const key = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
     if (!url || !key) throw new AssistantError(503, 'AUTH_CONFIG', 'Supabase authentication is not configured on the server.')
     const headers = { Authorization: `Bearer ${token}`, apikey: key }
+    const cacheKey = tokenKey(token), cached = verifiedSessions.get(cacheKey)
+    if (cached && cached.until > Date.now()) return { userId: cached.userId, url, headers }
     const response = await fetch(`${url}/auth/v1/user`, { headers, signal })
     if (!response.ok) throw new AssistantError(401, 'SESSION_EXPIRED', 'Your session expired. Sign in again.')
     const user = await response.json()
     if (!user.id) throw new AssistantError(401, 'SESSION_EXPIRED', 'Your session could not be verified.')
+    if (verifiedSessions.size > 500) verifiedSessions.delete(verifiedSessions.keys().next().value)
+    verifiedSessions.set(cacheKey, { userId: user.id, until: Date.now() + SESSION_TTL_MS })
     return { userId: user.id, url, headers }
 }
+/** Conversation envelopes use their own secret so rotating the Groq key doesn't end every conversation. */
+export const historySecret = env => env.ASSISTANT_HISTORY_SECRET?.trim() || env.GROQ_API_KEY
 // Preserve full provider assistant messages between turns, including reasoning.
 // Carry them in an authenticated, encrypted envelope; never render or expose that
 // internal content as a chat reply. Binding to the authenticated user prevents reuse.

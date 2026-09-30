@@ -1,0 +1,18 @@
+.checklists-page .playbook-section { margin-bottom: 18px; border: 1px solid var(--ui-line); }
+.checklists-page .playbook-header { min-height: 70px; gap: 12px; padding: 16px 20px; }
+.checklists-page .playbook-name { display: grid; gap: 5px; color: var(--text-primary); }
+.checklists-page .playbook-name small { color: var(--text-secondary); font-size: 11px; font-weight: 500; }
+.checklists-page .playbook-template { border-color: var(--accent); }
+.checklists-page .playbook-item { min-height: 50px; gap: 12px; padding: 7px 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.checklists-page .playbook-check { min-height: 44px; align-items: center; cursor: pointer; }
+.checklists-page .playbook-delete { flex: none; min-width: 44px; min-height: 44px; color: var(--red); }
+.checklists-page .playbook-section input:not([type=checkbox]) { min-width: 0; }
+.checklists-page .playbook-section .btn-primary { min-width: 44px; }
+.checklists-page .playbook-header:focus-visible,
+.checklists-page .playbook-delete:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+
+@media (max-width: 600px) {
+  .checklists-page .playbook-header { padding: 14px 16px; }
+  .checklists-page .playbook-name { min-width: 0 !important; }
+  .checklists-page .playbook-daily .playbook-header > span:nth-last-child(2) { display: none; }
+}

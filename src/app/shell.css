@@ -1,0 +1,48 @@
+/* Route composition and navigation; feature layouts stay with their owners. */
+.route-fallback, .not-found {
+  min-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 20px;
+  text-align: center;
+}
+.route-fallback p { color: var(--text-secondary); font-size: 14px; }
+.not-found .not-found-code { color: var(--accent); font-size: 72px; font-weight: 750; letter-spacing: -.04em; line-height: 1; }
+.not-found h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.2; }
+.not-found .not-found-description { max-width: 38ch; color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
+.not-found .btn-primary { margin-top: 8px; }
+.studio-topbar .account-label-phone { display: none; }
+.studio-topbar .studio-account > .toolbar-control { background: var(--ui-field); border-color: var(--ui-line); border-radius: 9px; gap: 10px; }
+.studio-topbar .studio-account > .toolbar-control:hover { border-color: var(--accent); }
+.studio-topbar .studio-account > .toolbar-control[aria-expanded=true] { background: var(--ui-raised); border-color: var(--accent); }
+.studio-rail .rail-link { color: var(--text-secondary); }
+.studio-rail .rail-link.active, .studio-rail .rail-link:hover { color: var(--accent); background: var(--ui-selected); }
+.studio-rail .rail-logo, .studio-rail .rail-link { flex-shrink: 0; }
+.studio-rail .rail-link:focus-visible { outline-offset: -4px; }
+.studio-rail { overscroll-behavior: contain; }
+.apex-popover.studio-popover strong { overflow-wrap: anywhere; }
+.apex-popover.studio-popover :is(a, button):focus-visible { outline-offset: -2px; }
+
+@media (max-width: 768px) {
+  .studio-topbar:has(.studio-toolbar) { padding-bottom: 12px; }
+  .studio-topbar .studio-wordmark { width: 100%; }
+  .studio-topbar .studio-toolbar { width: 100%; flex: 1 1 100%; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .studio-topbar .studio-account { display: flex; }
+  .studio-topbar .studio-account > .toolbar-control { width: auto; min-height: 44px; font-size: 12px; padding: 10px 12px; overflow: visible; }
+  .studio-topbar .studio-account > .toolbar-control::before { content: none; }
+  .studio-topbar .studio-account > .toolbar-control > svg { display: block; }
+  .studio-topbar .account-label-desktop { display: none; }
+  .studio-topbar .account-label-phone { display: inline; }
+  .studio-topbar .studio-date { position: static; flex: 1 1 100%; order: 3; width: 100%; padding: 0; }
+  .studio-topbar .studio-date > .apex-select { width: 100%; flex: 1; }
+  .studio-topbar .topbar-log { margin-left: auto; }
+  .studio-rail.is-open { width: min(256px, calc(100vw - 72px)); background: var(--ui-panel); border-color: var(--ui-line); padding-bottom: env(safe-area-inset-bottom); transition-property: transform; }
+  .studio-rail.is-open .rail-logo { justify-content: start; padding-left: 22px; }
+  .studio-rail.is-open .rail-link { flex-direction: row; justify-content: start; min-height: 52px; gap: 14px; padding: 12px 20px; font-size: 14px; }
+  .studio-rail.is-open .rail-bottom { padding-top: 16px; }
+  .studio-topbar .studio-mobile-toggle { position: relative; z-index: 120; }
+  .studio-topbar:has(.studio-mobile-toggle[aria-expanded=true]) .studio-mobile-toggle { position: fixed; right: 12px; top: 12px; background: var(--ui-panel); border: 1px solid var(--ui-line); color: var(--text-primary); }
+}

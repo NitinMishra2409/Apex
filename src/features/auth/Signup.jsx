@@ -1,13 +1,15 @@
+import './auth.css'
 import Brand from '../../shared/ui/Brand'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from './useAuth'
+import AuthRail from './AuthRail'
 
 const HexLogo = () => <Brand compact />
 
 const GoogleIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 18 18">
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 18 18">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
         <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
         <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05" />
@@ -28,10 +30,6 @@ const getStrength = (pw) => {
 }
 
 const I = {
-    page: { minHeight: 'calc(100dvh - 80px)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at center, #1a212c 0%, #101314 70%)', padding: '1rem' },
-    card: { width: '100%', maxWidth: 440, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '2.5rem 2rem', boxShadow: '0 0 60px rgba(241,182,87,0.08)' },
-    header: { textAlign: 'center', marginBottom: '2rem' },
-    label: { display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 },
     input: { width: '100%', padding: '11px 13px', boxSizing: 'border-box' },
     field: { marginBottom: '1rem' },
     divider: { display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0', color: 'var(--text-muted)', fontSize: 11 },
@@ -58,7 +56,8 @@ export default function Signup() {
         if (password !== confirm) return toast.error('Passwords do not match.')
         if (password.length < 6) return toast.error('Password must be at least 6 characters.')
         setLoading(true)
-        try { await signUp(email, password); navigate('/login') }
+        // Without email confirmation the new session already routes to the dashboard.
+        try { const result = await signUp(email, password); if (result?.needsConfirmation) navigate('/login') }
         catch (err) { toast.error(err.message || 'Sign up failed.') }
         finally { setLoading(false) }
     }
@@ -70,12 +69,13 @@ export default function Signup() {
     }
 
     return (
-        <div style={I.page}>
-            <div style={I.card}>
-                <div style={I.header}>
+        <div className="auth-page">
+            <AuthRail />
+            <div className="auth-card">
+                <div className="auth-header">
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><HexLogo /></div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Create your account</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Trade smarter. Learn faster.</div>
+                    <h1>Create your account</h1>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Your trading decisions, in perspective.</div>
                 </div>
 
                 <button onClick={handleGoogle} disabled={disabled} style={{ ...I.googleBtn, opacity: disabled ? 0.7 : 1 }}>
@@ -86,12 +86,12 @@ export default function Signup() {
 
                 <form onSubmit={handleSignUp}>
                     <div style={I.field}>
-                        <label style={I.label}>Email</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={I.input} />
+                        <label htmlFor="signup-email" className="auth-label">Email</label>
+                        <input type="email" id="signup-email" name="email" autoComplete="email" spellCheck={false} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={I.input} />
                     </div>
                     <div style={I.field}>
-                        <label style={I.label}>Password</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={I.input} />
+                        <label htmlFor="signup-password" className="auth-label">Password</label>
+                        <input type="password" id="signup-password" name="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={I.input} />
                         {strength && (
                             <div style={{ marginTop: 6 }}>
                                 <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
@@ -102,8 +102,8 @@ export default function Signup() {
                         )}
                     </div>
                     <div style={I.field}>
-                        <label style={I.label}>Confirm Password</label>
-                        <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••"
+                        <label htmlFor="signup-confirm" className="auth-label">Confirm Password</label>
+                        <input type="password" id="signup-confirm" name="confirm" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••"
                             style={{ ...I.input, borderColor: confirm && confirm !== password ? 'var(--red)' : undefined }} />
                         {confirm && confirm !== password && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>Passwords don't match</span>}
                     </div>

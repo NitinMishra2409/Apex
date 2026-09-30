@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AudioLines, Mic, MicOff, Phone, PhoneOff, Send, X } from 'lucide-react'
 import './expert.css'
+import VoiceTimingReadout from './VoiceTimingReadout'
+import VoiceChoiceControl from './VoiceChoiceControl'
 
 export const EXPERT_PORTRAIT = '/images/apex-expert.png'
 
@@ -12,7 +14,7 @@ export function ExpertCard({ onCall, disabled }) {
             <span className="expert-label">APEX · AI COACH</span>
             <h2>A little perspective.<br />A clearer next step.</h2>
             <p>Talk through a trade with a calm voice in your corner.</p>
-            <button className="btn-primary" onClick={onCall} disabled={disabled}><Phone size={16} />Call an expert</button>
+            <button className="btn-primary" onClick={onCall} disabled={disabled}><Phone size={16} />Call Apex</button>
             <small>A voice conversation with your AI coach</small>
         </div>
     </section>
@@ -26,7 +28,7 @@ const PHASES = {
     replying: ['Putting it into words', 'Your reply appears below as it arrives.'],
 }
 
-export default function ExpertCall({ assistant, periodLabel, onEnd }) {
+export default function ExpertCall({ assistant, periodLabel, onEnd, timingEnabled = false }) {
     const dialog = useRef(null)
     const [startedAt, setStartedAt] = useState(null)
     const [elapsed, setElapsed] = useState(0)
@@ -67,7 +69,7 @@ export default function ExpertCall({ assistant, periodLabel, onEnd }) {
                 <div className="expert-portrait-copy"><span className="expert-label">A CALMER PERSPECTIVE</span><h2>Good decisions<br />start with a conversation.</h2><p>Your journal. Your process. A little room to reflect.</p></div>
             </div>
             <div className="expert-call-body">
-                <header className="expert-call-header"><div><span className="expert-label">CALL AN EXPERT</span><h2 id="expert-call-title">Apex <span>· AI coach</span></h2></div><button className="expert-icon-button" onClick={onEnd} aria-label="Close expert call"><X size={20} /></button></header>
+                <header className="expert-call-header"><div><span className="expert-label">APEX VOICE CALL</span><h2 id="expert-call-title">Apex <span>· AI coach</span></h2></div><button className="expert-icon-button" onClick={onEnd} aria-label="Close expert call"><X size={20} /></button></header>
                 <div className="expert-call-context"><span>{periodLabel}</span><span>{assistant.context ? `${assistant.context.tradeCount} trades in context` : 'Your journal context'}{assistant.context?.demo ? ' · Demo' : ''}</span></div>
                 <div className="expert-call-stage">
                     <div className={`expert-call-wave ${speaking ? 'is-speaking' : ''} ${listening ? 'is-listening' : ''}`} aria-hidden="true">{Array.from({ length: 25 }, (_, i) => <i key={i} style={{ '--bar': i, '--height': `${listening ? 5 + assistant.level * (18 + (i * 7 % 37)) : 5 + (i * 13 % 38)}px` }} />)}</div>
@@ -75,7 +77,9 @@ export default function ExpertCall({ assistant, periodLabel, onEnd }) {
                     {startedAt && <span className="expert-call-timer" aria-label="Call duration">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}</span>}
                 </div>
                 <div className="expert-caption" aria-label="Latest conversation caption"><span>{caption ? lastMessage.role === 'user' ? 'YOU' : 'APEX' : 'A SPACE TO REFLECT'}</span><p>{caption || (assistant.busy ? 'Your response will appear here.' : '“Let’s look at the decision, not just the outcome.”')}</p></div>
-                {assistant.voiceProvider === 'device' && <p className="expert-voice-notice" role="status">Using device voice · Orpheus rate limit reached. Start a new conversation to try Orpheus again.</p>}
+                {timingEnabled && <div className="expert-timing-panel"><VoiceTimingReadout turns={assistant.timingTurns} /></div>}
+                {assistant.voiceChoice === 'studio' && assistant.voiceProvider === 'device' && <p className="expert-voice-notice" role="status">Using device voice · studio voice rate limit reached. Start a new conversation to try the studio voice again.</p>}
+                <VoiceChoiceControl value={assistant.voiceChoice} onChange={assistant.setVoiceChoice} className="expert-voice-choice" />
                 {assistant.error && <div className="expert-call-error" role="alert">{assistant.error}</div>}
                 <div className="expert-call-controls">
                     {!assistant.voiceActive && !assistant.busy ? <button className="btn-primary expert-start" onClick={start}><Phone size={17} />{!startedAt ? 'Start call' : assistant.error ? 'Try again' : 'Resume call'}</button> : <>
@@ -84,7 +88,7 @@ export default function ExpertCall({ assistant, periodLabel, onEnd }) {
                     </>}
                     <button className="expert-control expert-end" onClick={onEnd}><span><PhoneOff size={21} /></span>{startedAt ? 'End call' : 'Back to chat'}</button>
                 </div>
-                <footer className="expert-call-footer"><AudioLines size={14} /><span>{assistant.voiceProvider === 'device' ? 'Device voice' : 'Orpheus voice'} · {listening ? 'Microphone on' : 'Microphone off'}</span><p>Groq handles chat and spoken replies; NVIDIA transcribes your audio. Your browser supplies the rate-limit fallback voice. Your conversation stays in this tab.</p></footer>
+                <footer className="expert-call-footer"><AudioLines size={14} /><span>{assistant.voiceProvider === 'device' ? 'Device voice' : 'Studio voice'} · {listening ? 'Microphone on' : 'Microphone off'}</span><p>Groq handles transcription, chat and spoken replies. Your device voice speaks replies unless you choose the studio voice. Your conversation stays in this tab.</p></footer>
             </div>
         </div>
     </dialog>, document.body)
